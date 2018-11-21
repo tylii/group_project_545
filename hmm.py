@@ -47,8 +47,8 @@ def forward_step(x, y, A, B, pi):
   K = 6 # number of states 
   T = np.shape(x_train)[0] # length of the sequence
   alpha = np.zeros[K,T]
-
-	for i in range(K):
+  
+  for i in range(K):
 
     # compute the emission probability of the first observation using a multivariate Gaussian
     B_1 = norm.pdf() # compute the emission probability of the first observation using a multivariate Gaussian
@@ -59,7 +59,7 @@ def forward_step(x, y, A, B, pi):
       alpha[i,t] = B[i,y_t+1]
   return alpha
        
-def backward_step(x,y,A,B):
+#def backward_step(x,y,A,B):
 
 
 ## Step 3: For each state j and time t, use the probability Lj(t) and the current observation vector Ot to update the accumulators for that state.
@@ -72,13 +72,12 @@ def backward_step(x,y,A,B):
 
 #-----------------------------------------#
 
-
 def scale_prob(alpha, beta):
-  for k in range(0, K)
+  for k in range(0, K):
     c  = 1/np.sum(alpha[k,:])
     c2 = 1/np.sum(alpha[k,:])
         
-    for i in range(0,T)
+    for i in range(0,T):
       alpha[k,i] = alpha[k,i] * c
       beta[k,i] = beta[k,i] * c2
   return alpha, beta
@@ -99,10 +98,11 @@ def compute_B_initial(k):
   var_x  = np.cov(x.T)
   return avg_x[0:14], var_x[0:14,0:14] # figure this out 
 
-avg_x, var_x = compute_B_initial(1)
+def initialize_GMM(x):
+  # Use k-means on the input data to determine the initial means
+  # compute covariance using clustered samples 
 
-if __name__ == '__main__':
-  main()
+
 
 def create_states(i, activityIndex, x, n):
   # i is in the index of the activity sequence (400 instances in total)
@@ -119,7 +119,7 @@ def create_states(i, activityIndex, x, n):
   # need to determine how many frames are in each state
   if length >= n:
     frames_per_state = length//n
-    print(frames_per_state)
+    print('{} frames per state.'.format(frames_per_state))
     # segment the frame data (average the vectors?)
     states = []
     index = 0
@@ -127,17 +127,16 @@ def create_states(i, activityIndex, x, n):
       data = np.mean(frame_data[index:index + frames_per_state,:], axis = 0)
       states.append(data)
       index += frames_per_state
-      states = np.asarray(states)
-      valid = True
+    states = np.asarray(states)
+    valid = True
   else:
     print("Activity is not long enough.")
     states = []
     valid = False
   return states, valid
 
-
-
-
+if __name__ == '__main__':
+  main()
 
 
 

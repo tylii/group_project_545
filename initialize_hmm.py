@@ -117,7 +117,7 @@ def standardize_data(x):
   return z
 
 def test():
-  activity_indices = segment_data([y_train y_test])
+  activity_indices = segment_data([y_train,y_test])
   return activity_indices
 
 
