@@ -11,6 +11,7 @@ import os
 import numpy as np 
 from sklearn import preprocessing
 from scipy import stats
+import initialize_hmm
 
 def main():
   # load training X training and y training data 
@@ -27,90 +28,13 @@ def main():
     update_par()
   '''
 
-def load_data():
-  os.chdir("/Users/SARL/Downloads/UCI HAR Dataset/train")
-  f_x = open("X_train.txt", 'r')
-  f_y = open("y_train.txt", 'r')
-  f_s = open("subject_train.txt", 'r')
-  x = f_x.read().split(' ')
-  y = f_y.read().split('\n')
-  s = f_s.read().split('\n')
-  f_x.close()
-  f_y.close()
-  f_s.close()
-  indices = [i for i, a in enumerate(x) if a != '']
-  x_train = [float(x[j]) for j in indices]
-  x_train = np.reshape(x_train, (7352, 561))
-  y_train = np.array(y)
-  y_train = y_train[0:7352].astype(int)
-  s_train = np.array(s)
-  s_train = s_train[0:7352].astype(int)
-  return x_train, y_train, s_train
-
-x_train, y_train, s_train = load_data()
-
-def standardize_data(x):
-  z = preprocessing.scale(x)
-  # z = stats.zscore(x, axis = 0)
-  return z
-
-x_train = standardize_data(x_train)
-
-def init_par():
-  # Labels: Walking = W, Walking Upstairs = WU, Walking Downstairs = WD, Sitting = SI, Standing = ST, Laying = LY
-  # # features = m , # training samples = n, # of hidden states = K, # time points = T
-  # initial prior probability distribution
-  pi_W, pi_WU, pi_WD, pi_SI, pi_ST, pi_LY = [1.0/6.0, 1.0/6.0, 1.0/6.0, 1.0/6.0, 1.0/6.0, 1.0/6.0]
-  pi = [pi_W, pi_WU, pi_WD, pi_SI, pi_ST, pi_LY]
-  # initial transition probability matrix
-  # A(i,j) is the probability that the hidden variable transititions from state i, to state j at some time t: P(S_t = j | S_(t-1) = i)
-  
-  A_easy = (1.0/6.0) * np.ones((6,6))
-  # initial emission probabilities matrix
-  # B(i,j) is the probabilities that the state i, will emmit output variable j
-  # get the indices for each activity
-  ind_W  = [i for i, a in enumerate(y_train) if a == 1]
-  ind_WU = [i for i, a in enumerate(y_train) if a == 2]
-  ind_WD = [i for i, a in enumerate(y_train) if a == 3]
-  ind_SI = [i for i, a in enumerate(y_train) if a == 4]
-  ind_ST = [i for i, a in enumerate(y_train) if a == 5]
-  ind_LY = [i for i, a in enumerate(y_train) if a == 6]
-  
-  x_W  = [x_train[j] for j in ind_W]
-  x_WU = [x_train[j] for j in ind_WU]
-  x_WD = [x_train[j] for j in ind_WD]
-  x_SI = [x_train[j] for j in ind_SI]
-  x_ST = [x_train[j] for j in ind_ST]
-  x_LY = [x_train[j] for j in ind_LY]
-  
-  avg_xW  = np.mean(x_W, axis = 0)
-  avg_xWU = np.mean(x_WU, axis = 0)
-  avg_xWD = np.mean(x_WD, axis = 0)
-  avg_xSI = np.mean(x_SI, axis = 0)
-  avg_xST = np.mean(x_ST, axis = 0)
-  avg_xLY = np.mean(x_LY, axis = 0)
-  
-  averages_x = [avg_xW, avg_xWU, avg_xWD, avg_xSI, avg_xST, avg_xLY]
-  
-  var_xW  = np.var(x_W, axis = 0) 
-  var_xWU = np.var(x_WU, axis = 0)
-  var_xWD = np.var(x_WD, axis = 0)
-  var_xSI = np.var(x_SI, axis = 0)
-  var_xST = np.var(x_ST, axis = 0)
-  var_xLY = np.var(x_LY, axis = 0)
-  
-  variances_x = [var_xW, var_xWU, var_xWD, var_xSI, var_xST, var_xLY]
-  A = A_easy
-  
-  # mean and variance of each feature, emission probabilities will draw from these distributions 
-  B_mean = np.array([avg_xW, avg_xWU, avg_xWD, avg_xSI, avg_xST, avg_xLY])
-  B_var  = np.array([var_xW, var_xWU, var_xWD, var_xSI, var_xST, var_xLY])
-  
-  return A, B_mean, B_var, pi, averages_x, variances_x
-	# theta_init= [A, B, pi]
-
-A, B_mean, B_var, pi, averages_x, variances_x = init_par()
-
+# load the data, standardize it (get z-scaores), initialize the model parameters
+# get the indices of each activity sequence 
+x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
+x_train = initialize_hmm.standardize_data(x_train)
+A, B_mean, B_var, pi, averages_x, variances_x = initialize_hmm.init_par()
+activity_train = initialize_hmm.segment(y_train)
+activity_test  = initialize_hmm.segment(y_test)
 
 def forward_step(x, y, A, B, pi):
 	# calculate the forward probabilities
@@ -149,7 +73,7 @@ def backward_step(x,y,A,B):
 #-----------------------------------------#
 
 
-def scaling(alpha, beta):
+def scale_prob(alpha, beta):
   for k in range(0, K)
     c  = 1/np.sum(alpha[k,:])
     c2 = 1/np.sum(alpha[k,:])
@@ -159,18 +83,62 @@ def scaling(alpha, beta):
       beta[k,i] = beta[k,i] * c2
   return alpha, beta
 
-def calc_emission(x, K, B_mean, B_var):
-  P_tot = 1
-  P_mat = []
-  for i in range(0,561):
-    P = stats.norm.pdf(x[i], B_mean[K, i], np.sqrt(B_var[K, i]))
-    P_tot = P_tot * P
-    print(P_tot)
-    P_mat = np.append(P_mat,P)
-  return P_tot, P_mat 
+def calc_emission_initial(x, K):
+  mean, cov_matrix = compute_B_initial(K)
+  pdf = stats.multivariate_normal.pdf(x, mean, cov_matrix)
+  return pdf
 
-P_tot, P_mat = calc_emission(x_train[0,], 0, B_mean, B_var)
+pdf = calc_emission_initial(x_train[0,], 1)
 
+
+def compute_B_initial(k):
+  indices  = [i for i, a in enumerate(y_train) if a == k]
+  x  = [x_train[j] for j in indices]  
+  x = np.asarray(x)
+  avg_x  = np.mean(x, axis = 0)
+  var_x  = np.cov(x.T)
+  return avg_x[0:14], var_x[0:14,0:14] # figure this out 
+
+avg_x, var_x = compute_B_initial(1)
 
 if __name__ == '__main__':
   main()
+
+def create_states(i, activityIndex, x, n):
+  # i is in the index of the activity sequence (400 instances in total)
+  # activityIndex is the matrix generated by segment function 
+  # x is the associated data set (training or testing)
+  # n is the number of states per activity sequence (7 in the literature)
+  
+  # get the specific frames, and the length of the activity
+  start_ind  = activityIndex[i, 1]
+  end_ind    = activityIndex[i, 2]
+  length     = end_ind - start_ind
+  frame_data = x[start_ind:end_ind, :]
+  
+  # need to determine how many frames are in each state
+  if length >= n:
+    frames_per_state = length//n
+    print(frames_per_state)
+    # segment the frame data (average the vectors?)
+    states = []
+    index = 0
+    for j in range(0, 7):
+      data = np.mean(frame_data[index:index + frames_per_state,:], axis = 0)
+      states.append(data)
+      index += frames_per_state
+      states = np.asarray(states)
+      valid = True
+  else:
+    print("Activity is not long enough.")
+    states = []
+    valid = False
+  return states, valid
+
+
+
+
+
+
+
+
