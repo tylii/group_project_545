@@ -13,6 +13,7 @@ from sklearn import preprocessing
 from scipy import stats
 import initialize_hmm
 from sklearn.cluster import KMeans
+from collections import defaultdict
 
 def main():
   # load training X training and y training data 
@@ -37,30 +38,46 @@ A, B_mean, B_var, pi, averages_x, variances_x = initialize_hmm.init_par(x_train,
 activity_train = initialize_hmm.segment_data(y_train)
 activity_test  = initialize_hmm.segment_data(y_test)
 
-def forward_step(x, y, A, B, pi):
-	# calculate the forward probabilities
-	# alpha(i,t) is the probability of seeing x_1, x_2,... x_t (observations) and being in state i at time t
+def forward_backward(x, y, A, B, pi, K=3):
+	# calculate the forward probabilities (alpha)
+	# alpha[n][i,t] is the joint probability of seeing x_1, x_2,... x_t (observations) and being in state i at time t, for the n-th sequence
 	# size of alpha: K * T
-  # T: is length of sequence
-  # K: number of states (6) 
-  # x and y should be the feature matrix and labels corresponding to one sequence (e.g. subject 1) 
-
-  K = 6 # number of states 
-  T = np.shape(x_train)[0] # length of the sequence
-  alpha = np.zeros[K,T]
   
-  for i in range(K):
+  # K: number of hidden states
+  # x: a list of 2-D matrix. x[sequence ID][timeT,featureID], the features at each "time point" in each time series.
+  #                            these IDs all start from zero
+  # y: a list of 1-D vector. y[sequence ID] labels corresponding to one sequence
 
-    # compute the emission probability of the first observation using a multivariate Gaussian
-    B_1 = norm.pdf() # compute the emission probability of the first observation using a multivariate Gaussian
+  # alpha[n][k,t]: n is the index of the sequence, k is the index
 
-    alpha[i,0] = pi[i],B[i,x[i]] # initialize first alpha 
+   # length of the sequence
+  alpha = defaultdict() # the forward probability
+  beta = defaultdict()  # the backward probability
 
-    for t in range(1,T): # compute forward probability according 
-      alpha[i,t] = B[i,y_t+1]
-  return alpha
-       
-#def backward_step(x,y,A,B):
+  for n in len(x): # iterate over each sequence to calculate alpha for each sequence
+    
+    T = np.shape(x[n])[0]
+    for k in range(K):
+      # ----- initlaize the first alpha alpha[n][k,0] ------- 
+      b_k1 = NA   # fill this in: b[k][x[0]] the probability
+      alpha[n][k,0] = pi[k]*b_k1
+
+      # ----- initlaize the last beta beta[n][k,T-1] ------- 
+      beta[n][k,T-1] = 1
+
+    # calcualte the other alpha values in an iterative way
+    for t in range(1,T): # loop over all other time points
+      for k in range(K):
+        b_kx = NA # fill this in
+        alpha[n][k,t] = alpha[n][:,t-1].T.dot(A[:,k])*b_kx
+
+    # calcualte the other alpha values in an iterative way
+    for t in reversed(range(0,T-1)): # loop over all other time points
+      for k in range(K):
+        b_kx = NA # fill this in
+        beta[n][k,t] = A[k,:].dot(b_kx)*beta[n][k,t+1]
+
+  return alpha, beta
 
 
 ## Step 3: For each state j and time t, use the probability Lj(t) and the current observation vector Ot to update the accumulators for that state.
@@ -127,6 +144,15 @@ def activity_sequence(i, activityIndex, x, K):
     states = []
     valid = False
   return states, valid
+
+def cal_b(x,miu,cov):
+  # This function calculates the emission probability given the 
+  # means and covariance matrix for a multivariate Gaussian
+
+  # miu is a vector of means for one multivariate gaussian 
+  # var is the covariance matrix for one multivariate gaussian
+  # x is one obsevation 
+  return multivariate_normal.pdf(x, mean=miu, cov=cov)
 
 if __name__ == '__main__':
   main()
