@@ -43,57 +43,36 @@ def load_data():
   s_test = s_test[0:2947].astype(int)
   return x_train, y_train, s_train, x_test, y_test, s_test
 
-def init_par(x_train, y_train):
+def init_par(x_train, y_train, K):
   # Labels: Walking = W, Walking Upstairs = WU, Walking Downstairs = WD, Sitting = SI, Standing = ST, Laying = LY
-  # # features = m , # training samples = n, # of hidden states = K, # time points = T
+  # number of features = m , 
+  # training samples = n, 
+  # number of hidden states = K, 
+  # time points = T
+  
   # initial prior probability distribution
-  pi_W, pi_WU, pi_WD, pi_SI, pi_ST, pi_LY = [1.0/6.0, 1.0/6.0, 1.0/6.0, 1.0/6.0, 1.0/6.0, 1.0/6.0]
-  pi = [pi_W, pi_WU, pi_WD, pi_SI, pi_ST, pi_LY]
+  pi = (1.0/K)*np.ones((1,K))
+  
   # initial transition probability matrix
   # A(i,j) is the probability that the hidden variable transititions from state i, to state j at some time t: P(S_t = j | S_(t-1) = i)
-  
-  A_easy = (1.0/6.0) * np.ones((6,6))
-  # initial emission probabilities matrix
-  # B(i,j) is the probabilities that the state i, will emmit output variable j
+  A = (1.0/K) * np.ones((K,K))
+    
   # get the indices for each activity
-  ind_W  = [i for i, a in enumerate(y_train) if a == 1]
-  ind_WU = [i for i, a in enumerate(y_train) if a == 2]
-  ind_WD = [i for i, a in enumerate(y_train) if a == 3]
-  ind_SI = [i for i, a in enumerate(y_train) if a == 4]
-  ind_ST = [i for i, a in enumerate(y_train) if a == 5]
-  ind_LY = [i for i, a in enumerate(y_train) if a == 6]
+#  ind_W  = [i for i, a in enumerate(y_train) if a == 1]
+#  ind_WU = [i for i, a in enumerate(y_train) if a == 2]
+#  ind_WD = [i for i, a in enumerate(y_train) if a == 3]
+#  ind_SI = [i for i, a in enumerate(y_train) if a == 4]
+#  ind_ST = [i for i, a in enumerate(y_train) if a == 5]
+#  ind_LY = [i for i, a in enumerate(y_train) if a == 6]
   
-  x_W  = [x_train[j] for j in ind_W]
-  x_WU = [x_train[j] for j in ind_WU]
-  x_WD = [x_train[j] for j in ind_WD]
-  x_SI = [x_train[j] for j in ind_SI]
-  x_ST = [x_train[j] for j in ind_ST]
-  x_LY = [x_train[j] for j in ind_LY]
-  
-  avg_xW  = np.mean(x_W, axis = 0)
-  avg_xWU = np.mean(x_WU, axis = 0)
-  avg_xWD = np.mean(x_WD, axis = 0)
-  avg_xSI = np.mean(x_SI, axis = 0)
-  avg_xST = np.mean(x_ST, axis = 0)
-  avg_xLY = np.mean(x_LY, axis = 0)
-  
-  averages_x = [avg_xW, avg_xWU, avg_xWD, avg_xSI, avg_xST, avg_xLY]
-  
-  var_xW  = np.var(x_W, axis = 0) 
-  var_xWU = np.var(x_WU, axis = 0)
-  var_xWD = np.var(x_WD, axis = 0)
-  var_xSI = np.var(x_SI, axis = 0)
-  var_xST = np.var(x_ST, axis = 0)
-  var_xLY = np.var(x_LY, axis = 0)
-  
-  variances_x = [var_xW, var_xWU, var_xWD, var_xSI, var_xST, var_xLY]
-  A = A_easy
-  
-  # mean and variance of each feature, emission probabilities will draw from these distributions 
-  B_mean = np.array([avg_xW, avg_xWU, avg_xWD, avg_xSI, avg_xST, avg_xLY])
-  B_var  = np.array([var_xW, var_xWU, var_xWD, var_xSI, var_xST, var_xLY])
-  
-  return A, B_mean, B_var, pi
+#  x_W  = [x_train[j] for j in ind_W]
+#  x_WU = [x_train[j] for j in ind_WU]
+#  x_WD = [x_train[j] for j in ind_WD]
+#  x_SI = [x_train[j] for j in ind_SI]
+#  x_ST = [x_train[j] for j in ind_ST]
+#  x_LY = [x_train[j] for j in ind_LY]
+
+  return A, pi
 
 def segment_data(y):
   # Segment the activity sequences by taking the labels, and getting 
