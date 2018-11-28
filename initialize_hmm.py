@@ -43,7 +43,7 @@ def load_data():
   s_test = s_test[0:2947].astype(int)
   return x_train, y_train, s_train, x_test, y_test, s_test
 
-def init_par():
+def init_par(y_train):
   # Labels: Walking = W, Walking Upstairs = WU, Walking Downstairs = WD, Sitting = SI, Standing = ST, Laying = LY
   # # features = m , # training samples = n, # of hidden states = K, # time points = T
   # initial prior probability distribution
