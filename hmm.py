@@ -14,47 +14,79 @@ from scipy import stats
 import initialize_hmm
 from sklearn.cluster import KMeans
 from collections import defaultdict
+from scipy.stats import multivariate_normal
+import argparse
 
 def main():
-  # load training X training and y training data 
-  x,y = load_data()
+  # parse commandline arguments
+  '''
+  ap = argparse.ArgumentParser()
+  ap.add_argument("-f","--file", type=str,default = "standing.txt",
+    help="the input file which contains the sequences for one (class) of activity")
+  ap.add_argument("-t","--len_time", type=int,default = 7,
+    help="the length of the observation sequence")
+  ap.add_argument("-k", "--k_states", type=int, default = 3,
+    help="the number of hidden states")
+    
+  args = vars(ap.parse_args())
+  '''
+
+  args = thisdict =	{
+  "file": "standing.txt",
+  "h_states": 3,
+  "k_states": 7
+}  
+  input_file = args["file"]
+  K = args["k_states"]  # number of states  (default = 7)
+  H = args["h_states"]   # length of observation sequences (default = 7)
+  n_iteration = 5
+
+  # load the data
+  x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
+
+  # standardize it (get z-scaores)
+  x_train = initialize_hmm.standardize_data(x_train) 
+
+  # initialize the model parameters
+  # A, B_mean, B_var, pi, averages_x, variances_x = initialize_hmm.init_par(x_train, y_train)
+  
+  # get the indices of each activity sequence 
+  activity_train = initialize_hmm.segment_data(y_train)  
+  activity_test  = initialize_hmm.segment_data(y_test)
+  # activity_train/test has three columns: activity   start    end
+  
+  states, valid = activity_sequence(5, activity_train, x_train, K)
+
   #-----------------------------------------#
 	## Baum-Welch algorithm 
   ## Step 1: Initialize all Gaussian distributions with the mean and variance along the whole dataset.
-  A,B,pi = init_par()
   ## Step 2: Calculate the forward and backward probabilities for all states j and times t.
+
   '''
-  for ? :
-    forward_step()
-    backward_step()
-    update_par()
+  for i in range(n_iteration):
+    alpha,beta = forward_backward(x_train, y_train, A, B_mean, B_var, pi, H)
+    A, B_mean, B_var = update_GMM(x,alpha,beta,H)
   '''
 
-# load the data, standardize it (get z-scaores), initialize the model parameters
-# get the indices of each activity sequence 
-x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
-x_train = initialize_hmm.standardize_data(x_train)
-A, B_mean, B_var, pi, averages_x, variances_x = initialize_hmm.init_par(x_train, y_train)
-activity_train = initialize_hmm.segment_data(y_train)
-activity_test  = initialize_hmm.segment_data(y_test)
 
-def forward_backward(x, y, A, B, pi, K=3):
+def forward_backward(x, y, A, B, pi, H):
 	# calculate the forward probabilities (alpha)
 	# alpha[n][i,t] is the joint probability of seeing x_1, x_2,... x_t (observations) and being in state i at time t, for the n-th sequence
-	# size of alpha: K * T
+	# size of alpha: H * T
   
-  # K: number of hidden states
+  # H: number of hidden states
   # x: a list of 2-D matrix. x[sequence ID][timeT,featureID], the features at each "time point" in each time series.
   #                            these IDs all start from zero
   # y: a list of 1-D vector. y[sequence ID] labels corresponding to one sequence
 
-  # alpha[n][k,t]: n is the index of the sequence, k is the index
+  # alpha[n][h,t]: n is the index of the sequence, h is the index
 
    # length of the sequence
+  K = H
   alpha = defaultdict() # the forward probability
   beta = defaultdict()  # the backward probability
 
-  for n in len(x): # iterate over each sequence to calculate alpha for each sequence
+  for n in range(len(x)): # iterate over each sequence to calculate alpha for each sequence
     
     T = np.shape(x[n])[0]
     for k in range(K):
@@ -78,7 +110,6 @@ def forward_backward(x, y, A, B, pi, K=3):
         beta[n][k,t] = A[k,:].dot(b_kx)*beta[n][k,t+1]
 
   return alpha, beta
-
 
 ## Step 3: For each state j and time t, use the probability Lj(t) and the current observation vector Ot to update the accumulators for that state.
 
@@ -150,12 +181,10 @@ def cal_b(x,miu,cov):
   # means and covariance matrix for a multivariate Gaussian
 
   # miu is a vector of means for one multivariate gaussian 
-  # var is the covariance matrix for one multivariate gaussian
+  # cov is the covariance matrix for one multivariate gaussian
   # x is one obsevation 
   return multivariate_normal.pdf(x, mean=miu, cov=cov)
 
-if __name__ == '__main__':
-  main()
 
 def initialize_GMM(x, n_Gauss):
   # Use k-means on the input data to determine the initial centers and variances of the Gaussians
@@ -178,6 +207,59 @@ def initialize_GMM(x, n_Gauss):
     covar[i,:] = x_covar
   return main_kmeans, Gauss_means, covar
 
+def update_GMM(x,alpha,beta,H):
+  K = H
+  # --- calcualte gamma ----
+  # which is the probability of being in hidden state k at time t for a given sequence
+  N = len(x) # number of training sequences
+  F = x[0].shape[1] # number of features
+  gamma = np.zeros([N,K,T])
+  for n in range(N):
+    T = x[n].shape[0] # the length of the observation sequence/ time series
+    for t in range(T):
+      tmp = alpha[n][:,t].T.dot(beta[n][:,t])
+      for k in range(K):
+        gamma[n,k,t] = alpha[n][k,t]*beta[n][k,t]/tmp
+
+  # ---  Update B (mean and covariance matrix) ----
+  # --- update mean ---
+  # recalculate mean and variance with weighted average 
+
+  new_mean = np.zeros([K,F])
+  new_var = np.zeros([K,F])
+  for k in range(K): # iterate over all hidden states
+    sum_of_weights = np.sum(gamma[:,k,:])
+    weighted_sum_mean = 0
+    weighted_sum_var = np.zeros([F,F])
+    for n in range(N):
+      weighted_sum_mean += gamma[n,k,:].reshape(1,-1).dot(x[n])
+    new_mean[k,:] = weighted_sum_mean/sum_of_weights
+
+    for n in range(N):
+      T = x[n].shape[0]
+      for t in range(T):
+        centered = (x[n][t,:] - new_mean[k,:]).T
+        weighted_sum_var += gamma[n,k,t]*(centered.dot(centered.T))
+    new_var[k,:] = weighted_sum_var/sum_of_weights
+
+  # --- update A ---
+  # A is a K*K matrix (not symmertric)
+  for i in range(K):
+    for j in range(K):
+      e_i_to_j = 0 # the expected probability of transition from state i to j
+      e_i_to_all = 0  # the expected number of transitions from state i
+
+      for n in range(N):
+        for t in range(T):
+          e_i_to_all += alpha[n][i,t]*beta[n][i,t]
+          e_i_to_j += alpha[n][i,t]*beta[n][i,t]
+  
+
+  return new_A, new_mean, new_var  # new_mean: K*F; new_var: K*F*F 
+
+
+if __name__ == '__main__':
+  main()
 
 
 
