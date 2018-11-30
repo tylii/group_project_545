@@ -43,7 +43,7 @@ def load_data():
   s_test = s_test[0:2947].astype(int)
   return x_train, y_train, s_train, x_test, y_test, s_test
 
-def init_par(x_train, y_train, K):
+def init_par(x_train, y_train, H):
   # Labels: Walking = W, Walking Upstairs = WU, Walking Downstairs = WD, Sitting = SI, Standing = ST, Laying = LY
   # number of features = m , 
   # training samples = n, 
@@ -51,11 +51,11 @@ def init_par(x_train, y_train, K):
   # time points = T
   
   # initial prior probability distribution
-  pi = (1.0/K)*np.ones((1,K))
+  pi = (1.0/H)*np.ones((1,H))
   
   # initial transition probability matrix
   # A(i,j) is the probability that the hidden variable transititions from state i, to state j at some time t: P(S_t = j | S_(t-1) = i)
-  A = (1.0/K) * np.ones((K,K))
+  A = (1.0/H) * np.ones((H,H))
     
   # get the indices for each activity
 #  ind_W  = [i for i, a in enumerate(y_train) if a == 1]

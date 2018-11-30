@@ -37,26 +37,27 @@ def main():
   "k_states": 7
 }  
   input_file = args["file"]
-  K = args["k_states"]  # number of states  (default = 7)
-  H = args["h_states"]   # length of observation sequences (default = 7)
+  K = args["k_states"]  # number of observations in a sequence = states  (default = 7)
+  H = args["h_states"]   # number of hidden states (default = 3)
   n_iteration = 5
 
   # load the data
   x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
 
-  # standardize it (get z-scaores)
+  # standardize it (get z-scores)
   x_train = initialize_hmm.standardize_data(x_train) 
 
   # initialize the model parameters
-  # A, B_mean, B_var, pi, averages_x, variances_x = initialize_hmm.init_par(x_train, y_train)
+  A, pi = initialize_hmm.init_par(x_train, y_train, H)
+  kmeans, B_mean, B_var = initialize_GMM(x_train, H)
   
   # get the indices of each activity sequence 
   activity_train = initialize_hmm.segment_data(y_train)  
   activity_test  = initialize_hmm.segment_data(y_test)
   # activity_train/test has three columns: activity   start    end
   
-  states, valid = activity_sequence(5, activity_train, x_train, K)
-
+#  states, valid = activity_sequence(5, activity_train, x_train, K)
+  segments = all_sequences(5, activity_train)
   #-----------------------------------------#
 	## Baum-Welch algorithm 
   ## Step 1: Initialize all Gaussian distributions with the mean and variance along the whole dataset.
@@ -67,14 +68,6 @@ def main():
     alpha,beta = forward_backward(x_train, y_train, A, B_mean, B_var, pi, H)
     A, B_mean, B_var = update_GMM(x,alpha,beta,H)
   '''
-
-# load the data, standardize it (get z-scaores), initialize the model parameters
-# get the indices of each activity sequence 
-x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
-x_train = initialize_hmm.standardize_data(x_train)
-A, pi = initialize_hmm.init_par(x_train, y_train)
-activity_train = initialize_hmm.segment_data(y_train)
-activity_test  = initialize_hmm.segment_data(y_test)
 
 def forward_backward(x, y, A, B, pi, H):
 	# calculate the forward probabilities (alpha)
@@ -205,7 +198,8 @@ def all_sequences(L, segments):
     for i in range(len(segments)):
         if segments[i,0] == L:
             states, valid = activity_sequence(i, segments, x_train, 7)
-            data_sequence.append(states)
+            if valid: 
+                data_sequence.append(states)
     return data_sequence
 
 def initialize_GMM(x, n_Gauss):
