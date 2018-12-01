@@ -89,7 +89,10 @@ def main():
     for n in range(len(x_train)):
       alpha[n], beta[n] = scale_prob(alpha[n], beta[n],H,K)
       print("This is the {}-th interation, the {}-th scalling".format(i,n))
-    A, B_mean, B_var, pi = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var, pi)    
+    A, B_mean, B_var, pi = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var, pi)  
+    print("!!")
+
+    
   
 
 def forward_backward(x, A, B_mean,B_var, pi, K):
@@ -153,11 +156,11 @@ def forward_backward(x, A, B_mean,B_var, pi, K):
 def scale_prob(alpha, beta,K,T):   
   for k in range(0, K):
     c  = 1/np.sum(alpha[k,:])
-    c2 = 1/np.sum(alpha[k,:])
+    # c2 = 1/np.sum(alpha[k,:])
         
     for i in range(0,T):
       alpha[k,i] = alpha[k,i] * c
-      beta[k,i] = beta[k,i] * c2
+      beta[k,i] = beta[k,i] * c
   return alpha, beta
 
 def calc_emission_initial(x, K):
@@ -218,10 +221,14 @@ def cal_b(x,miu,covar):
 
   # check if we are using only the diagnal elements of the cov matrix
 
+  threshold = 1e-3
   if covar.ndim==1:
-    return np.log(multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar)))
+    pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
+    # print("The pdf is {}".format(pdf))
+    return pdf if pdf > threshold else threshold
+    # return multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
 
-  return np.log(multivariate_normal.pdf(x, mean=miu, cov=covar))
+  # return multivariate_normal.pdf(x, mean=miu, cov=covar)
 
 
 
