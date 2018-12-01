@@ -16,6 +16,8 @@ from sklearn.cluster import KMeans
 from collections import defaultdict
 from scipy.stats import multivariate_normal
 import argparse
+from sklearn.ensemble import RandomForestClassifier
+import matplotlib.pyplot as plt
 
 def main():
   # parse commandline arguments
@@ -40,74 +42,94 @@ def main():
   K = args["k_states"]  # number of observations in a sequence = states  (default = 7)
   H = args["h_states"]   # number of hidden states (default = 3)
   n_iteration = 5
+  ACT = 2 # the activity that we build this HMM for.
 
   # load the data
   x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
 
   # standardize it (get z-scores)
   x_train = initialize_hmm.standardize_data(x_train) 
-
-  # initialize the model parameters
-  A, pi = initialize_hmm.init_par(x_train, y_train, H)
-  kmeans, B_mean, B_var = initialize_GMM(x_train, H)
   
+  # use the first two features for debugging purpose
+  # x_train = x_train[:,0:2]
+
+  
+
   # get the indices of each activity sequence 
   activity_train = initialize_hmm.segment_data(y_train)  
   activity_test  = initialize_hmm.segment_data(y_test)
+  segments = all_sequences(x_train,ACT, activity_train)
+  reduced_xtrain = feature_selection_RF(x_train,y_train,ACT,activity_train)
+
+  x_train = segments
+  # initialize the model parameters
+  A, pi = initialize_hmm.init_par(x_train, y_train, H) # x_train, y_train not used in the function
+  kmeans, B_mean, B_var = initialize_GMM(x_train, H)
+
   # activity_train/test has three columns: activity   start    end
   
 #  states, valid = activity_sequence(5, activity_train, x_train, K)
-  segments = all_sequences(5, activity_train)
+
   #-----------------------------------------#
 	## Baum-Welch algorithm 
   ## Step 1: Initialize all Gaussian distributions with the mean and variance along the whole dataset.
   ## Step 2: Calculate the forward and backward probabilities for all states j and times t.
 
-  '''
+  
   for i in range(n_iteration):
-    alpha,beta = forward_backward(x_train, y_train, A, B_mean, B_var, pi, H)
-    A, B_mean, B_var = update_GMM(x,alpha,beta,H)
-  '''
+    alpha,beta = forward_backward(x_train, A, B_mean, B_var, pi.T, H)
 
-def forward_backward(x, y, A, B, pi, H):
+    # scale alpha and beta 
+    for n in range(len(x_train)):
+      alpha[n], beta[n] = scale_prob(alpha[n], beta[n],H,K)
+    
+    A, B_mean, B_var = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var)    
+  
+
+def forward_backward(x, A, B_mean,B_var, pi, K):
+  # **** In this function K is number of hidden states and T is length of sequence *****
 	# calculate the forward probabilities (alpha)
 	# alpha[n][i,t] is the joint probability of seeing x_1, x_2,... x_t (observations) and being in state i at time t, for the n-th sequence
-	# size of alpha: H * T
+	# size of alpha: K * T
   
-  # H: number of hidden states
+  # K: number of hidden states
   # x: a list of 2-D matrix. x[sequence ID][timeT,featureID], the features at each "time point" in each time series.
   #                            these IDs all start from zero
   # y: a list of 1-D vector. y[sequence ID] labels corresponding to one sequence
 
-  # alpha[n][h,t]: n is the index of the sequence, h is the index
+  # alpha[n][k,t]: n is the index of the sequence, k is the index
 
    # length of the sequence
-  K = H
+  
   alpha = defaultdict() # the forward probability
   beta = defaultdict()  # the backward probability
 
   for n in range(len(x)): # iterate over each sequence to calculate alpha for each sequence
     
     T = np.shape(x[n])[0]
+    alpha[n] = np.zeros([K,T])
+    beta[n] = np.zeros([K,T])
     for k in range(K):
       # ----- initlaize the first alpha alpha[n][k,0] ------- 
-      b_k1 = NA   # fill this in: b[k][x[0]] the probability
-      alpha[n][k,0] = pi[k]*b_k1
-
+      b_k_o1 = cal_b(x[n][0,:],B_mean[k,:],B_var[k,:])   # fill this in: b[k][x[0]] the probability
+      alpha[n][k,0] = pi[k]*b_k_o1
       # ----- initlaize the last beta beta[n][k,T-1] ------- 
       beta[n][k,T-1] = 1
 
     # calcualte the other alpha values in an iterative way
     for t in range(1,T): # loop over all other time points
       for k in range(K):
-        b_kx = NA # fill this in
-        alpha[n][k,t] = alpha[n][:,t-1].T.dot(A[:,k])*b_kx
+        b_k_ot = cal_b(x[n][t,:],B_mean[k,:],B_var[k,:])
+        alpha[n][k,t] = alpha[n][:,t-1].T.dot(A[:,k])*b_k_ot
 
-    # calcualte the other alpha values in an iterative way
+    # calcualte the other beta values in an iterative way
     for t in reversed(range(0,T-1)): # loop over all other time points
       for k in range(K):
-        b_kx = NA # fill this in
-        beta[n][k,t] = A[k,:].dot(b_kx)*beta[n][k,t+1]
+        tmp = 0
+        for j in range(K):
+          b_j_ot = cal_b(x[n][t,:],B_mean[k,:],B_var[k,:])
+          tmp += A[k,j]*b_j_ot
+        beta[n][k,t] = tmp*beta[n][k,t+1]
 
   return alpha, beta
 
@@ -121,7 +143,7 @@ def forward_backward(x, y, A, B, pi, H):
 
 #-----------------------------------------#
 
-def scale_prob(alpha, beta):
+def scale_prob(alpha, beta,K,T):   
   for k in range(0, K):
     c  = 1/np.sum(alpha[k,:])
     c2 = 1/np.sum(alpha[k,:])
@@ -162,7 +184,7 @@ def activity_sequence(i, activityIndex, x, K):
   # need to determine how many frames are in each state
   if length >= K:
     frames_per_state = length//K
-#    print('~{} frames per state.'.format(frames_per_state))
+    #print('~{} frames per state.'.format(frames_per_state))
     # segment the frame data (average the vectors?)
     states = []
     index = 0
@@ -186,11 +208,18 @@ def cal_b(x,miu,covar):
   # miu is a vector of means for one multivariate gaussian 
   # cov is the covariance matrix for one multivariate gaussian
   # x is one obsevation 
-  return multivariate_normal.pdf(x, mean=miu, cov=covar)
+
+  # check if we are using only the diagnal elements of the cov matrix
+
+  if covar.ndim==1:
+    return np.log(multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar)))
+
+  return np.log(multivariate_normal.pdf(x, mean=miu, cov=covar))
 
 
 
-def all_sequences(L, segments):
+
+def all_sequences(x_train, L, segments):
     # Run activity_sequence on all the datas of label 
     # segments is the output of initialize_hmm.segment_data()
     # Returns a list of (7,561) dimensional arrays 
@@ -208,27 +237,29 @@ def initialize_GMM(x, n_Gauss):
   main_kmeans = KMeans(n_clusters = n_Gauss, random_state = 1).fit(x)  
   Gauss_means = main_kmeans.cluster_centers_
   
+  n_feature = x.shape[1] # 561 if we are using all features
   # compute covariance using clustered samples (diagonal matrix, n_components by n_features )
   labels = main_kmeans.labels_
-  covar  = np.zeros((n_Gauss, 561))
+  covar  = np.zeros((n_Gauss, n_feature))
   for i in range(n_Gauss):
     x_clus = x[np.where(labels==i)]
     x_covar  = np.var(x_clus.T, axis = 1)
     
     # set lower bound in the Gaussians
-    for j in range(561):
+    for j in range(n_feature):
         if x_covar[j] < 1e-3:
             x_covar[j] = 1e-3
             
     covar[i,:] = x_covar
   return main_kmeans, Gauss_means, covar
 
-def update_GMM(x,alpha,beta,H):
+def update_GMM(x,alpha,beta,H,A, B_mean,B_var):
   K = H
   # --- calcualte gamma ----
   # which is the probability of being in hidden state k at time t for a given sequence
   N = len(x) # number of training sequences
   F = x[0].shape[1] # number of features
+  T = x[0].shape[0] # number of time points
   gamma = np.zeros([N,K,T])
   for n in range(N):
     T = x[n].shape[0] # the length of the observation sequence/ time series
@@ -256,24 +287,97 @@ def update_GMM(x,alpha,beta,H):
       for t in range(T):
         centered = (x[n][t,:] - new_mean[k,:]).T
         weighted_sum_var += gamma[n,k,t]*(centered.dot(centered.T))
-    new_var[k,:] = weighted_sum_var/sum_of_weights
+    
+    # for now we just care abou the diagnal elements
+    new_var[k,:] = (weighted_sum_var/sum_of_weights).diagonal()
 
   # --- update A ---
   # A is a K*K matrix (not symmertric)
+  new_A = np.zeros(A.shape)
   for i in range(K):
     for j in range(K):
       e_i_to_j = 0 # the expected probability of transition from state i to j
       e_i_to_all = 0  # the expected number of transitions from state i
 
       for n in range(N):
-        for t in range(T):
+        for t in range(T-1):
+          b_j_ot1 = cal_b(x[n][t+1,:],B_mean[j,:],B_var[j,:])
+          e_i_to_j += alpha[n][i,t]*beta[n][i,t+1]*A[i,j]*b_j_ot1
           e_i_to_all += alpha[n][i,t]*beta[n][i,t]
-          e_i_to_j += alpha[n][i,t]*beta[n][i,t]
-  
+
+      new_A[i,j] = e_i_to_j/e_i_to_all
 
   return new_A, new_mean, new_var  # new_mean: K*F; new_var: K*F*F 
 
 
+
+def feature_selection_RF(x,y,ACT,activity_train):
+  segment1 = all_sequences(x,1, activity_train)
+  segment2 = all_sequences(x,2, activity_train)
+  segment3 = all_sequences(x,3, activity_train)
+
+  train_x = segment1 + segment2 + segment3
+
+  binary_y = [1]*len(segment1) + [0]*(len(segment2)+len(segment3))
+
+  x = feature_transform(train_x)
+  forest = RandomForestClassifier(n_estimators=2000, max_depth=20,random_state=0)
+
+  forest.fit(x,binary_y )
+  print(forest.feature_importances_)
+
+
+  importances = forest.feature_importances_
+  std = np.std([tree.feature_importances_ for tree in forest.estimators_],
+               axis=0)
+  indices = np.argsort(importances)[::-1]
+
+  # Print the feature ranking
+  print("Feature ranking:")
+
+  for f in range(x.shape[1]):
+      print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
+
+  # Plot the feature importances of the forest
+  plt.figure()
+  plt.title("Feature importances")
+  plt.bar(range(x.shape[1]), importances[indices],
+         color="r", yerr=std[indices], align="center")
+  plt.xticks(range(x.shape[1]), indices)
+  plt.xlim([-1, x.shape[1]])
+  plt.show()
+
+
+  # Print the feature ranking of top 20
+  print("Feature ranking:")
+
+  for f in range(20):
+      print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
+
+  # Plot the feature importances of top 20
+  plt.figure()
+  plt.title("Feature importances")
+  plt.bar(range(20), importances[indices[0:20]],
+         color="r", yerr=std[indices[0:20]], align="center")
+  plt.xticks(range(20), indices[0:20])
+  plt.xlim([-1, 20])
+  plt.show()
+
+
+  pred_y = forest.predict(x)
+  print(forest.predict(x))
+
+  return []
+
+def feature_transform(train_x):
+  new_x = np.zeros([len(train_x),train_x[0].shape[1]*2])
+
+  for n in range(len(train_x)):
+    a =  np.mean(train_x[n], axis=0)
+    b = np.var(train_x[n], axis=0)
+    new_x[n] =np.concatenate((a, b), axis=None)    
+
+  return new_x
 if __name__ == '__main__':
   main()
 
