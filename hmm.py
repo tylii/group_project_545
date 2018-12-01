@@ -51,17 +51,24 @@ def main():
   x_train = initialize_hmm.standardize_data(x_train) 
   
   # use the first two features for debugging purpose
-  # x_train = x_train[:,0:2]
+  x_train = x_train[:,0:100]
 
   
 
   # get the indices of each activity sequence 
   activity_train = initialize_hmm.segment_data(y_train)  
   activity_test  = initialize_hmm.segment_data(y_test)
-  segments = all_sequences(x_train,ACT, activity_train)
-  reduced_xtrain = feature_selection_RF(x_train,y_train,ACT,activity_train)
+  
+  # get the stationary segments 
+  segments4 = all_sequences(x_train,4, activity_train)
+  segments5 = all_sequences(x_train,5, activity_train)
+  segments6 = all_sequences(x_train,6, activity_train)
+  
+  segments = segments4 + segments5 + segments6
+#  reduced_xtrain = feature_selection_RF(x_train,y_train,ACT,activity_train)
 
   x_train = segments
+#  y_stationary = initialize_hmm.relabel(y_train)
   # initialize the model parameters
   A, pi = initialize_hmm.init_par(x_train, y_train, H) # x_train, y_train not used in the function
   kmeans, B_mean, B_var = initialize_GMM(x_train, H)
@@ -75,15 +82,14 @@ def main():
   ## Step 1: Initialize all Gaussian distributions with the mean and variance along the whole dataset.
   ## Step 2: Calculate the forward and backward probabilities for all states j and times t.
 
-  
   for i in range(n_iteration):
     alpha,beta = forward_backward(x_train, A, B_mean, B_var, pi.T, H)
 
     # scale alpha and beta 
     for n in range(len(x_train)):
       alpha[n], beta[n] = scale_prob(alpha[n], beta[n],H,K)
-    
-    A, B_mean, B_var = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var)    
+      print("This is the {}-th interation, the {}-th scalling".format(i,n))
+    A, B_mean, B_var, pi = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var, pi)    
   
 
 def forward_backward(x, A, B_mean,B_var, pi, K):
@@ -131,6 +137,7 @@ def forward_backward(x, A, B_mean,B_var, pi, K):
           tmp += A[k,j]*b_j_ot
         beta[n][k,t] = tmp*beta[n][k,t+1]
 
+    
   return alpha, beta
 
 ## Step 3: For each state j and time t, use the probability Lj(t) and the current observation vector Ot to update the accumulators for that state.
@@ -234,6 +241,10 @@ def all_sequences(x_train, L, segments):
 def initialize_GMM(x, n_Gauss):
   # Use k-means on the input data to determine the initial centers and variances of the Gaussians
   # perform k-means on the entire data set, with number of clusters equal to number of hidden states 
+  
+  # parse the segmented x_train data into a matrix
+  x= np.concatenate((x), axis = 0)
+  
   main_kmeans = KMeans(n_clusters = n_Gauss, random_state = 1).fit(x)  
   Gauss_means = main_kmeans.cluster_centers_
   
@@ -253,7 +264,7 @@ def initialize_GMM(x, n_Gauss):
     covar[i,:] = x_covar
   return main_kmeans, Gauss_means, covar
 
-def update_GMM(x,alpha,beta,H,A, B_mean,B_var):
+def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
   K = H
   # --- calcualte gamma ----
   # which is the probability of being in hidden state k at time t for a given sequence
@@ -307,7 +318,14 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var):
 
       new_A[i,j] = e_i_to_j/e_i_to_all
 
-  return new_A, new_mean, new_var  # new_mean: K*F; new_var: K*F*F 
+    # update pi #
+    new_pi = np.zeros(pi.shape)
+  # --- update pi ----
+  new_pi=np.zeros(K)
+  for k in range(K):
+      new_pi[k] = np.mean(gamma[:,k,0])
+
+  return new_A, new_mean, new_var, new_pi  # new_mean: K*F; new_var: K*F*F 
 
 
 
