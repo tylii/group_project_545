@@ -99,6 +99,31 @@ def test():
   activity_indices = segment_data([y_train,y_test])
   return activity_indices
 
+def relabel(y_train):
+    # This function relabels data into either moving or stationary 
+    # 0 for stationary, 1 for moving 
+    y = []
+    for i in range(len(y_train)):
+        if (y_train[i] == 1 or y_train[i] == 2 or y_train[i] == 3):
+            y.append(1)
+        elif (y_train[i] == 4 or y_train[i] == 5 or y_train[i] == 6):
+            y.append(0)
+        else:
+            print("Error")
+    return np.asarray(y)
+        
+y_boop = relabel(y_train)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
