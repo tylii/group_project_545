@@ -16,6 +16,8 @@ from sklearn.cluster import KMeans
 from collections import defaultdict
 from scipy.stats import multivariate_normal
 import argparse
+from sklearn.ensemble import RandomForestClassifier
+import matplotlib.pyplot as plt
 
 def main():
   # parse commandline arguments
@@ -40,6 +42,7 @@ def main():
   K = args["k_states"]  # number of observations in a sequence = states  (default = 7)
   H = args["h_states"]   # number of hidden states (default = 3)
   n_iteration = 5
+  ACT = 2 # the activity that we build this HMM for.
 
   # load the data
   x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
@@ -50,19 +53,23 @@ def main():
   # use the first two features for debugging purpose
   # x_train = x_train[:,0:2]
 
-  # initialize the model parameters
-  A, pi = initialize_hmm.init_par(x_train, y_train, H)
-  kmeans, B_mean, B_var = initialize_GMM(x_train, H)
   
+
   # get the indices of each activity sequence 
   activity_train = initialize_hmm.segment_data(y_train)  
   activity_test  = initialize_hmm.segment_data(y_test)
+  segments = all_sequences(x_train,ACT, activity_train)
+  reduced_xtrain = feature_selection_RF(x_train,y_train,ACT,activity_train)
+
+  x_train = segments
+  # initialize the model parameters
+  A, pi = initialize_hmm.init_par(x_train, y_train, H) # x_train, y_train not used in the function
+  kmeans, B_mean, B_var = initialize_GMM(x_train, H)
+
   # activity_train/test has three columns: activity   start    end
   
 #  states, valid = activity_sequence(5, activity_train, x_train, K)
-  segments = all_sequences(x_train,5, activity_train)
 
-  x_train = segments
   #-----------------------------------------#
 	## Baum-Welch algorithm 
   ## Step 1: Initialize all Gaussian distributions with the mean and variance along the whole dataset.
@@ -177,7 +184,7 @@ def activity_sequence(i, activityIndex, x, K):
   # need to determine how many frames are in each state
   if length >= K:
     frames_per_state = length//K
-#    print('~{} frames per state.'.format(frames_per_state))
+    #print('~{} frames per state.'.format(frames_per_state))
     # segment the frame data (average the vectors?)
     states = []
     index = 0
@@ -303,6 +310,74 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var):
   return new_A, new_mean, new_var  # new_mean: K*F; new_var: K*F*F 
 
 
+
+def feature_selection_RF(x,y,ACT,activity_train):
+  segment1 = all_sequences(x,1, activity_train)
+  segment2 = all_sequences(x,2, activity_train)
+  segment3 = all_sequences(x,3, activity_train)
+
+  train_x = segment1 + segment2 + segment3
+
+  binary_y = [1]*len(segment1) + [0]*(len(segment2)+len(segment3))
+
+  x = feature_transform(train_x)
+  forest = RandomForestClassifier(n_estimators=2000, max_depth=20,random_state=0)
+
+  forest.fit(x,binary_y )
+  print(forest.feature_importances_)
+
+
+  importances = forest.feature_importances_
+  std = np.std([tree.feature_importances_ for tree in forest.estimators_],
+               axis=0)
+  indices = np.argsort(importances)[::-1]
+
+  # Print the feature ranking
+  print("Feature ranking:")
+
+  for f in range(x.shape[1]):
+      print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
+
+  # Plot the feature importances of the forest
+  plt.figure()
+  plt.title("Feature importances")
+  plt.bar(range(x.shape[1]), importances[indices],
+         color="r", yerr=std[indices], align="center")
+  plt.xticks(range(x.shape[1]), indices)
+  plt.xlim([-1, x.shape[1]])
+  plt.show()
+
+
+  # Print the feature ranking of top 20
+  print("Feature ranking:")
+
+  for f in range(20):
+      print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
+
+  # Plot the feature importances of top 20
+  plt.figure()
+  plt.title("Feature importances")
+  plt.bar(range(20), importances[indices[0:20]],
+         color="r", yerr=std[indices[0:20]], align="center")
+  plt.xticks(range(20), indices[0:20])
+  plt.xlim([-1, 20])
+  plt.show()
+
+
+  pred_y = forest.predict(x)
+  print(forest.predict(x))
+
+  return []
+
+def feature_transform(train_x):
+  new_x = np.zeros([len(train_x),train_x[0].shape[1]*2])
+
+  for n in range(len(train_x)):
+    a =  np.mean(train_x[n], axis=0)
+    b = np.var(train_x[n], axis=0)
+    new_x[n] =np.concatenate((a, b), axis=None)    
+
+  return new_x
 if __name__ == '__main__':
   main()
 
