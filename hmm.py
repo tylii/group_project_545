@@ -306,7 +306,7 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
     for n in range(N):
       T = x[n].shape[0]
       for t in range(T):
-        centered = (x[n][t,:] - new_mean[k,:]).T
+        centered = (x[n][t,:] - new_mean[k,:]).reshape([-1,1])
         weighted_sum_var += gamma[n,k,t]*(centered.dot(centered.T))
     
     # for now we just care abou the diagnal elements
@@ -407,7 +407,7 @@ def feature_transform(train_x):
 
   return new_x
 if __name__ == '__main__':
-  main()
+  hmm_train(7, 2, 5, "moving")
 
 
 
