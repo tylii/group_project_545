@@ -343,8 +343,6 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
 
       new_A[i,j] = e_i_to_j/e_i_to_all
 
-    # update pi #
-    new_pi = np.zeros(pi.shape)
   # --- update pi ----
   new_pi=np.zeros(K)
   for k in range(K):
@@ -422,7 +420,7 @@ def feature_transform(train_x):
 
   return new_x
 if __name__ == '__main__':
-  main()
+  hmm_train(7, 2, 5, "moving")
 
 
 
