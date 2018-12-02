@@ -19,7 +19,8 @@ import argparse
 from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 
-def main():
+
+def hmm_train(K, H, n_iterations, model_type):
   # parse commandline arguments
   '''
   ap = argparse.ArgumentParser()
@@ -33,16 +34,16 @@ def main():
   args = vars(ap.parse_args())
   '''
 
-  args = thisdict =	{
-  "file": "standing.txt",
-  "h_states": 3,
-  "k_states": 7
-}  
-  input_file = args["file"]
-  K = args["k_states"]  # number of observations in a sequence = states  (default = 7)
-  H = args["h_states"]   # number of hidden states (default = 3)
-  n_iteration = 5
-  ACT = 2 # the activity that we build this HMM for.
+#  args = thisdict =	{
+#  "file": "standing.txt",
+#  "h_states": 3,
+#  "k_states": 7
+#}  
+#  input_file = args["file"]
+#  K = args["k_states"]  # number of observations in a sequence = states  (default = 7)
+#  H = args["h_states"]   # number of hidden states (default = 3)
+#  n_iteration = 5
+#  ACT = 2 # the activity that we build this HMM for.
 
   # load the data
   x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
@@ -57,14 +58,19 @@ def main():
 
   # get the indices of each activity sequence 
   activity_train = initialize_hmm.segment_data(y_train)  
-  activity_test  = initialize_hmm.segment_data(y_test)
   
   # get the stationary segments 
+  segments1 = all_sequences(x_train,1, activity_train)
+  segments2 = all_sequences(x_train,2, activity_train)
+  segments3 = all_sequences(x_train,3, activity_train)
   segments4 = all_sequences(x_train,4, activity_train)
   segments5 = all_sequences(x_train,5, activity_train)
   segments6 = all_sequences(x_train,6, activity_train)
   
-  segments = segments4 + segments5 + segments6
+  if model_type == "stationary":
+      segments = segments4 + segments5 + segments6
+  elif model_type == "moving":
+      segments = segments1 + segments2 + segments3
 #  reduced_xtrain = feature_selection_RF(x_train,y_train,ACT,activity_train)
 
   x_train = segments
@@ -82,18 +88,16 @@ def main():
   ## Step 1: Initialize all Gaussian distributions with the mean and variance along the whole dataset.
   ## Step 2: Calculate the forward and backward probabilities for all states j and times t.
 
-  for i in range(n_iteration):
+  for i in range(n_iterations):
     alpha,beta = forward_backward(x_train, A, B_mean, B_var, pi.T, H)
 
     # scale alpha and beta 
     for n in range(len(x_train)):
       alpha[n], beta[n] = scale_prob(alpha[n], beta[n],H,K)
-      print("This is the {}-th interation, the {}-th scalling".format(i,n))
+      print("This is the {}-th interation, the {}-th scaling".format(i,n))
     A, B_mean, B_var, pi = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var, pi)  
-    print("!!")
-
-    
-  
+    print("!!")    
+  return A, B_mean, B_var, pi, alpha, beta
 
 def forward_backward(x, A, B_mean,B_var, pi, K):
   # **** In this function K is number of hidden states and T is length of sequence *****
@@ -153,12 +157,12 @@ def forward_backward(x, A, B_mean,B_var, pi, K):
 
 #-----------------------------------------#
 
-def scale_prob(alpha, beta,K,T):   
-  for k in range(0, K):
-    c  = 1/np.sum(alpha[k,:])
+def scale_prob(alpha, beta, K, T):   
+  for i in range(0, T):
+    c  = 1/np.sum(alpha[:,i])
     # c2 = 1/np.sum(alpha[k,:])
         
-    for i in range(0,T):
+    for k in range(0,K):
       alpha[k,i] = alpha[k,i] * c
       beta[k,i] = beta[k,i] * c
   return alpha, beta
@@ -225,7 +229,7 @@ def cal_b(x,miu,covar):
   if covar.ndim==1:
     pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
     # print("The pdf is {}".format(pdf))
-    return pdf if pdf > threshold else threshold
+    return np.log(pdf) if pdf > threshold else threshold
     # return multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
 
   # return multivariate_normal.pdf(x, mean=miu, cov=covar)
