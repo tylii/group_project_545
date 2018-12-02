@@ -140,10 +140,9 @@ def forward_backward(x, A, B_mean,B_var, pi, K):
       for k in range(K):
         tmp = 0
         for j in range(K):
-          b_j_ot = cal_b(x[n][t,:],B_mean[k,:],B_var[k,:])
-          tmp += A[k,j]*b_j_ot
-        beta[n][k,t] = tmp*beta[n][k,t+1]
-
+          b_j_ot1 = cal_b(x[n][t+1,:],B_mean[j,:],B_var[j,:])
+          tmp += A[k,j]*b_j_ot1*beta[n][j,t+1]
+        beta[n][k,t] = tmp
     
   return alpha, beta
 
