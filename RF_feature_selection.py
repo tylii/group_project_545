@@ -56,4 +56,4 @@ def permutation_importances(rf, X_train, y_train, metric):
         imp.append(baseline - m)
     return np.array(imp)
 
-importances, forest = compute_average_importance(1, x_train, y_boop)
+importances, forest = compute_average_importance(30, x_train, y_boop)
