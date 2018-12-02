@@ -12,6 +12,7 @@ import numpy as np
 from sklearn import preprocessing
 from scipy import stats
 import initialize_hmm
+import viterbi
 from sklearn.cluster import KMeans
 from collections import defaultdict
 from scipy.stats import multivariate_normal
@@ -54,7 +55,6 @@ def hmm_train(K, H, n_iterations, model_type):
   # use the first two features for debugging purpose
   x_train = x_train[:,0:100]
 
-  
 
   # get the indices of each activity sequence 
   activity_train = initialize_hmm.segment_data(y_train)  
@@ -94,9 +94,9 @@ def hmm_train(K, H, n_iterations, model_type):
     # scale alpha and beta 
     for n in range(len(x_train)):
       alpha[n], beta[n] = scale_prob(alpha[n], beta[n],H,K)
-      print("This is the {}-th interation, the {}-th scaling".format(i,n))
+      print("This is the {}-th iteration, the {}-th scaling".format(i,n))
     A, B_mean, B_var, pi = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var, pi)  
-    print("!!")    
+    print(A)
   return A, B_mean, B_var, pi, alpha, beta
 
 def forward_backward(x, A, B_mean,B_var, pi, K):
@@ -123,7 +123,7 @@ def forward_backward(x, A, B_mean,B_var, pi, K):
     alpha[n] = np.zeros([K,T])
     beta[n] = np.zeros([K,T])
     for k in range(K):
-      # ----- initlaize the first alpha alpha[n][k,0] ------- 
+      # ----- initlaize the first alpha alpha[n][k,0] -------
       b_k_o1 = cal_b(x[n][0,:],B_mean[k,:],B_var[k,:])   # fill this in: b[k][x[0]] the probability
       alpha[n][k,0] = pi[k]*b_k_o1
       # ----- initlaize the last beta beta[n][k,T-1] ------- 
@@ -163,7 +163,7 @@ def scale_prob(alpha, beta, K, T):
         
     for k in range(0,K):
       alpha[k,i] = alpha[k,i] * c
-      beta[k,i] = beta[k,i] * c
+#      beta[k,i] = beta[k,i] * c
   return alpha, beta
 
 def calc_emission_initial(x, K):
@@ -226,14 +226,28 @@ def cal_b(x,miu,covar):
 
   threshold = 1e-3
   if covar.ndim==1:
-    pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
+      n_samples, n_dim = X.shape
+      lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covar), 1)
+                  + np.sum((means ** 2) / covars, 1)
+                  - 2 * np.dot(X, (means / covars).T)
+                  + np.dot(X ** 2, (1.0 / covars).T))
+#    pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
     # print("The pdf is {}".format(pdf))
-    return np.log(pdf) if pdf > threshold else threshold
     # return multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
 
   # return multivariate_normal.pdf(x, mean=miu, cov=covar)
+    return pdf if pdf > threshold else threshold
 
 
+def _log_multivariate_normal_density_diag(X, means, covars):
+    X = np.concatenate((X), axis = 0)
+    """Compute Gaussian log-density at X for a diagonal model."""
+    n_samples, n_dim = X.shape
+    lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
+                  + np.sum((means ** 2) / covars, 1)
+                  - 2 * np.dot(X, (means / covars).T)
+                  + np.dot(X ** 2, (1.0 / covars).T))
+    return lpr
 
 
 def all_sequences(x_train, L, segments):
@@ -306,7 +320,7 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
     for n in range(N):
       T = x[n].shape[0]
       for t in range(T):
-        centered = (x[n][t,:] - new_mean[k,:]).T
+        centered = (x[n][t,:] - new_mean[k,:]).reshape([-1,1])
         weighted_sum_var += gamma[n,k,t]*(centered.dot(centered.T))
     
     # for now we just care abou the diagnal elements
@@ -322,9 +336,10 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
 
       for n in range(N):
         for t in range(T-1):
+          Pn = viterbi.compute_viterbi(x[n], B_mean, B_var, A, pi, K, T)
           b_j_ot1 = cal_b(x[n][t+1,:],B_mean[j,:],B_var[j,:])
-          e_i_to_j += alpha[n][i,t]*beta[n][i,t+1]*A[i,j]*b_j_ot1
-          e_i_to_all += alpha[n][i,t]*beta[n][i,t]
+          e_i_to_j += alpha[n][i,t]*beta[n][j,t+1]*A[i,j]*b_j_ot1/Pn
+          e_i_to_all += alpha[n][i,t]*beta[n][i,t]/Pn
 
       new_A[i,j] = e_i_to_j/e_i_to_all
 
