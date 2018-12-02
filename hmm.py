@@ -322,14 +322,13 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
 
       for n in range(N):
         for t in range(T-1):
+          Pn = 1 # fill in
           b_j_ot1 = cal_b(x[n][t+1,:],B_mean[j,:],B_var[j,:])
-          e_i_to_j += alpha[n][i,t]*beta[n][i,t+1]*A[i,j]*b_j_ot1
-          e_i_to_all += alpha[n][i,t]*beta[n][i,t]
+          e_i_to_j += alpha[n][i,t]*beta[n][j,t+1]*A[i,j]*b_j_ot1/Pn
+          e_i_to_all += alpha[n][i,t]*beta[n][i,t]/Pn
 
       new_A[i,j] = e_i_to_j/e_i_to_all
 
-    # update pi #
-    new_pi = np.zeros(pi.shape)
   # --- update pi ----
   new_pi=np.zeros(K)
   for k in range(K):
