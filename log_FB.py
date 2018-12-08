@@ -1,6 +1,7 @@
 ### Log computation of the forward and backward probabilities 
 import numpy as np
-
+from hmm import _log_multivariate_normal_density_diag
+from hmm import diag_pdf
 #%% define the extended helper functions 
 
 def eexp(x):
@@ -68,7 +69,7 @@ def backward_step(A, B, pi, H, K):
     """ Backward step in the log domain"""
     beta = np.zeros((H,K))
     for i in range(H):
-        beta[i,K] = 0 
+        beta[i,K-1] = 0 
     for t in range(K-2,-1,-1):
         for i in range(H):
             logbeta = np.nan
@@ -126,9 +127,58 @@ def update_A(gamma, xi, H, K):
             A[i,j] = eexp(elnproduct(numerator,-denominator))
     return A
 
+def update_miu(gamma, x, H, K):
+    """ Update the means of the Gaussians using 
+    one sequence of the training data.
+    Returns the elementwise-log of the mean"""
+    num = 0
+    den = 0
+    miu = np.zeros((H,x.shape[1]))
+    for i in range(H):
+        for t in range(0,K):
+            num += eexp(gamma[i,t])*x[t,:]
+            den += eexp(gamma[i,t])
+        miu[i,:] = np.divide(num,den)
+#        miu[i,:] = elnproduct(np.log(num),-den)
+    return miu
+
+def update_var(gamma, x, H, K, miu):
+    """ Update the covariance matrix using
+    one sequence"""
+    num = 0
+    den = 0
+    var = np.zeros((H, x.shape[1]))
+    for i in range(H):
+        for t in range(0,K):
+            num += eexp(gamma[i,t])*np.outer(x[t,:]-miu[i,:], x[t,:]-miu[i,:])
+            den += eexp(gamma[i,t])
+        var[i,:] = np.diag(np.divide(num,den))
+#        var[i,:] = elnproduct(np.lognum,-den).diag()
+        
+        # set lower bound on variances 
+        for j in range(0,x.shape[1]):
+            if var[i,j] < 1e-3:
+                var[i,j] = 1e-3
+    return var
+        
+def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d, n):
+    """ Performs a full pass through the Baum-Welch algorithm
+    and updates A and pi, miu and var"""
+    
+    x_train = x[n][:,0:d]
+    B = diag_pdf(x_train, B_mean[:,0:d], B_var[:,0:d], H, K)
+    print(B)
+   
+    alpha = forward_step(A, B, pi, H, K)
+    beta  = backward_step(A, B, pi, H, K)
+    gamma = calc_gamma(alpha, beta, H, K)
+    xi    = calc_xi(alpha, beta, A, B, H, K)
+    pi    = update_pi(gamma, H)
+    A     = update_A(gamma, xi, H, K)
+    miu   = update_miu(gamma, x_train, H, K)
+    var = update_var(gamma, x_train, H, K, miu)
+    return alpha, beta, gamma, pi, A, miu, var
         
         
-        
-        
-        
+
         
