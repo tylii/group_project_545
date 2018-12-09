@@ -6,7 +6,7 @@
 # ^ "y_test" gives the movement of each row from 1-6. NOTE: movements of 1 person can change during experiment
 # ^ 1 WALKING, 2 WALKING_UPSTAIRS, 3 WALKING_DOWNSTAIRS, 4 SITTING, 5 STANDING, 6 LAYING
 
- 
+
 import os
 import numpy as np 
 from sklearn import preprocessing
@@ -16,6 +16,7 @@ import viterbi
 from sklearn.cluster import KMeans
 from collections import defaultdict
 from scipy.stats import multivariate_normal
+from scipy.stats import norm
 import argparse
 from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
@@ -53,7 +54,7 @@ def hmm_train(K, H, n_iterations, model_type):
   x_train = initialize_hmm.standardize_data(x_train) 
   
   # use the first two features for debugging purpose
-  x_train = x_train[:,0:100]
+  x_train = x_train[:,0:10]
 
 
   # get the indices of each activity sequence 
@@ -97,6 +98,7 @@ def hmm_train(K, H, n_iterations, model_type):
       print("This is the {}-th iteration, the {}-th scaling".format(i,n))
     A, B_mean, B_var, pi = update_GMM(x_train,alpha,beta,H,A,B_mean,B_var, pi)  
     print(A)
+    print(pi)
   return A, B_mean, B_var, pi, alpha, beta
 
 def forward_backward(x, A, B_mean,B_var, pi, K):
@@ -208,7 +210,7 @@ def activity_sequence(i, activityIndex, x, K):
     states = np.asarray(states)
     valid = True
   else:
-    print("Activity is not long enough.")
+#    print("Activity is not long enough.")
     states = []
     valid = False
   return states, valid
@@ -223,25 +225,30 @@ def cal_b(x,miu,covar):
   # x is one obsevation 
 
   # check if we are using only the diagnal elements of the cov matrix
-
-  threshold = 1e-3
   if covar.ndim==1:
-      n_samples, n_dim = X.shape
-      lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covar), 1)
-                  + np.sum((means ** 2) / covars, 1)
-                  - 2 * np.dot(X, (means / covars).T)
-                  + np.dot(X ** 2, (1.0 / covars).T))
-#    pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
+    pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
     # print("The pdf is {}".format(pdf))
-    # return multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
+    return pdf 
 
-  # return multivariate_normal.pdf(x, mean=miu, cov=covar)
-    return pdf if pdf > threshold else threshold
-
+def cal_b_matrix(x, miu, covar, H, K):
+    # This function calculates the multivariate pdf assuming the covariance
+    # has a diagonal form. This simplifies the multivariate Gaussian to 
+    # just a product of univariate Gaussians 
+    B = np.zeros((K,H))
+    for h in range(H):
+        for k in range(K):
+            tmp = cal_b(x[k,:], miu[h,:], covar[h,:])
+            if np.isinf(tmp):
+                tmp = 1e307
+            elif tmp == 0:
+                tmp = 1e-307
+            B[k,h] = tmp
+            
+    return B
 
 def _log_multivariate_normal_density_diag(X, means, covars):
-    X = np.concatenate((X), axis = 0)
     """Compute Gaussian log-density at X for a diagonal model."""
+    X = np.concatenate((X), axis = 0)
     n_samples, n_dim = X.shape
     lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
                   + np.sum((means ** 2) / covars, 1)
@@ -287,6 +294,41 @@ def initialize_GMM(x, n_Gauss):
             
     covar[i,:] = x_covar
   return main_kmeans, Gauss_means, covar
+
+def initialize_GaussianMixture(x, n_Gauss, n_mixture):
+  # Use k-means on the input data to determine the initial centers and variances of the Gaussian mixtures
+  # Use k-means again on the subsets to determine the mixture components 
+  
+  # parse the segmented x_train data into a matrix
+  x= np.concatenate((x), axis = 0)
+  
+  main_kmeans = KMeans(n_clusters = n_Gauss, random_state = 1).fit(x)
+  labels = main_kmeans.labels_
+    
+  kmeanses = []
+  for label in range(n_Gauss):
+      kmeans = KMeans(n_clusters = n_mixture, random_state = 1)
+      kmeans.fit(x[np.where(labels == label)])
+      kmeanses.append(kmeans)
+  
+  # compute covariance using clustered samples 
+  # for diagonal matrix, dimensions are (n_components, n_features, n_mixture)
+  # the dimension of the means are (n_components, n_features, n_mixture)
+  n_feature = x.shape[1] # 561 if we are using all features
+  covar  = np.zeros((n_Gauss, n_feature, n_mixture))
+  means = np.zeros((n_Gauss, n_feature, n_mixture))
+  
+  for i in range(n_Gauss):
+    x_clus = x[np.where(labels==i)]
+    x_covar  = np.var(x_clus.T, axis = 1)
+    
+    # set lower bound in the Gaussians
+    for j in range(n_feature):
+        if x_covar[j] < 1e-3:
+            x_covar[j] = 1e-3
+            
+    covar[i,:] = x_covar
+  return main_kmeans, means, covar
 
 def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
   K = H
@@ -335,8 +377,8 @@ def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
       e_i_to_all = 0  # the expected number of transitions from state i
 
       for n in range(N):
+        Pn = viterbi.compute_viterbi(x[n], B_mean, B_var, A, pi, K, T)
         for t in range(T-1):
-          Pn = viterbi.compute_viterbi(x[n], B_mean, B_var, A, pi, K, T)
           b_j_ot1 = cal_b(x[n][t+1,:],B_mean[j,:],B_var[j,:])
           e_i_to_j += alpha[n][i,t]*beta[n][j,t+1]*A[i,j]*b_j_ot1/Pn
           e_i_to_all += alpha[n][i,t]*beta[n][i,t]/Pn
@@ -419,6 +461,7 @@ def feature_transform(train_x):
     new_x[n] =np.concatenate((a, b), axis=None)    
 
   return new_x
+
 if __name__ == '__main__':
   hmm_train(7, 2, 5, "moving")
 
