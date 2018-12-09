@@ -295,6 +295,41 @@ def initialize_GMM(x, n_Gauss):
     covar[i,:] = x_covar
   return main_kmeans, Gauss_means, covar
 
+def initialize_GaussianMixture(x, n_Gauss, n_mixture):
+  # Use k-means on the input data to determine the initial centers and variances of the Gaussian mixtures
+  # Use k-means again on the subsets to determine the mixture components 
+  
+  # parse the segmented x_train data into a matrix
+  x= np.concatenate((x), axis = 0)
+  
+  main_kmeans = KMeans(n_clusters = n_Gauss, random_state = 1).fit(x)
+  labels = main_kmeans.labels_
+    
+  kmeanses = []
+  for label in range(n_Gauss):
+      kmeans = KMeans(n_clusters = n_mixture, random_state = 1)
+      kmeans.fit(x[np.where(labels == label)])
+      kmeanses.append(kmeans)
+  
+  # compute covariance using clustered samples 
+  # for diagonal matrix, dimensions are (n_components, n_features, n_mixture)
+  # the dimension of the means are (n_components, n_features, n_mixture)
+  n_feature = x.shape[1] # 561 if we are using all features
+  covar  = np.zeros((n_Gauss, n_feature, n_mixture))
+  means = np.zeros((n_Gauss, n_feature, n_mixture))
+  
+  for i in range(n_Gauss):
+    x_clus = x[np.where(labels==i)]
+    x_covar  = np.var(x_clus.T, axis = 1)
+    
+    # set lower bound in the Gaussians
+    for j in range(n_feature):
+        if x_covar[j] < 1e-3:
+            x_covar[j] = 1e-3
+            
+    covar[i,:] = x_covar
+  return main_kmeans, means, covar
+
 def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
   K = H
   # --- calcualte gamma ----
