@@ -210,7 +210,7 @@ def activity_sequence(i, activityIndex, x, K):
     states = np.asarray(states)
     valid = True
   else:
-    print("Activity is not long enough.")
+#    print("Activity is not long enough.")
     states = []
     valid = False
   return states, valid
@@ -225,27 +225,25 @@ def cal_b(x,miu,covar):
   # x is one obsevation 
 
   # check if we are using only the diagnal elements of the cov matrix
-#  threshold = 0
   if covar.ndim==1:
     pdf = multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
     # print("The pdf is {}".format(pdf))
-    # return multivariate_normal.pdf(x, mean=miu, cov=np.diag(covar))
-
-  # return multivariate_normal.pdf(x, mean=miu, cov=covar)
     return pdf 
 
-def diag_pdf(x, miu, covar, H, K):
+def cal_b_matrix(x, miu, covar, H, K):
     # This function calculates the multivariate pdf assuming the covariance
     # has a diagonal form. This simplifies the multivariate Gaussian to 
     # just a product of univariate Gaussians 
     B = np.zeros((K,H))
-    for h in range(2):
-        for i in range(x.shape[0]):
-            pdf = 1
-            for j in range(x.shape[1]):
-                tmp = norm.pdf(x[i,j], miu[h,j], np.sqrt(covar[h,j]))
-                pdf = pdf * tmp
-            B[i,h] = pdf
+    for h in range(H):
+        for k in range(K):
+            tmp = cal_b(x[k,:], miu[h,:], covar[h,:])
+            if np.isinf(tmp):
+                tmp = 1e307
+            elif tmp == 0:
+                tmp = 1e-307
+            B[k,h] = tmp
+            
     return B
 
 def _log_multivariate_normal_density_diag(X, means, covars):
