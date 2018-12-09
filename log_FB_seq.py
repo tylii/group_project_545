@@ -164,7 +164,7 @@ def update_var(gamma, x, H, K, miu):
 def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
     """ Performs a full pass through the Baum-Welch algorithm
     and updates A and pi, miu and var. Need to loop through all the 
-    sequences, computing alpha, beta, gamma, and xi"""
+    sequences, computing alpha, beta, gamma, and xi for each."""
     # input x should be a combination of all the 7 x 561 segments 
     # d is a list of the features to include
     
@@ -177,7 +177,7 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
     
     for e in range(E):
         x_train = x[e][:,d]
-        B = cal_b_matrix(x_train, B_mean[:,d], B_var[:,d], H, K)
+        B = cal_b_matrix(x_train, B_mean, B_var, H, K)
         alpha = forward_step(A, B, pi, H, K)
         beta  = backward_step(A, B, pi, H, K)
         gamma = calc_gamma(alpha, beta, H, K)
@@ -234,7 +234,7 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
             num = 0
             den = 0
             for t in range(0,K):
-                num += eexp(gamma_mat[e][i,t])*np.outer(x[e][t,d]-B_mean[i,d], x[e][t,d]-B_mean[i,d])
+                num += eexp(gamma_mat[e][i,t])*np.outer(x[e][t,d]-B_mean[i,:], x[e][t,d]-B_mean[i,:])
                 den += eexp(gamma_mat[e][i,t])
             super_num += num
             super_den += den

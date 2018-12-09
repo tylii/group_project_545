@@ -6,7 +6,7 @@
 # ^ "y_test" gives the movement of each row from 1-6. NOTE: movements of 1 person can change during experiment
 # ^ 1 WALKING, 2 WALKING_UPSTAIRS, 3 WALKING_DOWNSTAIRS, 4 SITTING, 5 STANDING, 6 LAYING
 
- 
+
 import os
 import numpy as np 
 from sklearn import preprocessing
