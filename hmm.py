@@ -319,8 +319,13 @@ def initialize_GaussianMixture(x, n_Gauss, n_mixture):
   means = np.zeros((n_Gauss, n_feature, n_mixture))
   
   for i in range(n_Gauss):
+    for j in range(n_mixture):
+        means[i,:,j] = (kmeanses[i]).cluster_centers_[j,:]
     x_clus = x[np.where(labels==i)]
     x_covar  = np.var(x_clus.T, axis = 1)
+    
+    
+    
     
     # set lower bound in the Gaussians
     for j in range(n_feature):
