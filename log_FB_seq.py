@@ -1,6 +1,5 @@
 ### Log computation of the forward and backward probabilities 
 import numpy as np
-from hmm import _log_multivariate_normal_density_diag
 from hmm import cal_b_matrix
 #%% define the extended helper functions 
 

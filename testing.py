@@ -92,9 +92,9 @@ def compute_error_stage1(y_pred):
     error = error/E
     print("Testing error rate for Stage 1 is {}.".format(error))
 
-A_stat, B_mean_stat, B_var_stat, pi_stat = train_model([4,5,6], H, K, d, 3)
-A_mov, B_mean_mov, B_var_mov, pi_mov= train_model([1,2,3], H, K, d, 3)
-y_pred = predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, H, K)
+#A_stat, B_mean_stat, B_var_stat, pi_stat = train_model([4,5,6], H, K, d, 3)
+#A_mov, B_mean_mov, B_var_mov, pi_mov= train_model([1,2,3], H, K, d, 3)
+#y_pred = predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, H, K)
 
 #%%
 #x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
