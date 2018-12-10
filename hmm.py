@@ -315,25 +315,22 @@ def initialize_GaussianMixture(x, n_Gauss, n_mixture):
   # for diagonal matrix, dimensions are (n_components, n_features, n_mixture)
   # the dimension of the means are (n_components, n_features, n_mixture)
   n_feature = x.shape[1] # 561 if we are using all features
-  covar  = np.zeros((n_Gauss, n_feature, n_mixture))
+  var  = np.zeros((n_Gauss, n_feature, n_mixture))
   means = np.zeros((n_Gauss, n_feature, n_mixture))
   
   for i in range(n_Gauss):
     for j in range(n_mixture):
         means[i,:,j] = (kmeanses[i]).cluster_centers_[j,:]
-    x_clus = x[np.where(labels==i)]
-    x_covar  = np.var(x_clus.T, axis = 1)
+        x_clus = x[np.where(kmeanses[i].labels_==j)]
+        x_covar  = np.var(x_clus.T, axis = 1)
+        
+        # set lower bound in the Gaussians
+        for q in range(n_feature):
+            if x_covar[q] < 1e-3:
+                x_covar[q] = 1e-3
+        var[i,:,j] = x_covar   
     
-    
-    
-    
-    # set lower bound in the Gaussians
-    for j in range(n_feature):
-        if x_covar[j] < 1e-3:
-            x_covar[j] = 1e-3
-            
-    covar[i,:] = x_covar
-  return main_kmeans, means, covar
+  return kmeanses, means, var
 
 def update_GMM(x,alpha,beta,H,A, B_mean,B_var, pi):
   K = H
