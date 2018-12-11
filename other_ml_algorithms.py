@@ -1,9 +1,9 @@
-  # load the data
- 
 import initialize_hmm
-from sklearn import svm, metrics, linear_model
+from sklearn import svm, metrics, linear_model, tree
 from sklearn.model_selection import cross_validate
+from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.base import clone
 from hmm import all_sequences
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ from collections import defaultdict
 import itertools
 
 
-def try_other_classifier(n_features,n_features2_1,n_features2_2,Kfold):
+def try_other_classifiers(n_features,n_features2_1,n_features2_2,Kfold):
     '''
     This function test other classifier, using K-fold cross validation.
     n_features: how many top features will be used
@@ -21,8 +21,7 @@ def try_other_classifier(n_features,n_features2_1,n_features2_2,Kfold):
     x,y = get_data([1,2,3,4,5,6])  # here y is like [3,1,4,4,5,2 ....] (not binary label)
     folds = split_folds_by_sequence(x,y,Kfold)
 
-    svm_scores = np.zeros(len(folds))
-    # rf_scores = np.zeros(len(folds))
+    model_scores = defaultdict(lambda: np.zeros(len(folds)))
     for i in range(len(folds)):
         x_train, y_train,x_test,y_test = get_train_test_from_folds(folds,i)
         # ----feature selection ------
@@ -30,27 +29,43 @@ def try_other_classifier(n_features,n_features2_1,n_features2_2,Kfold):
         y_train_b = binary_label(y_train,[1,2,3],[4,5,6]) # y with binary values [0,1] 
         important_features = feature_selection_layer1(x_train, y_train_b)
         top_features_l1 = important_features[0:n_features]
-
+        
         # layer 2
         top_features_l2_123 = feature_selection_layer2(x_train, y_train,[1,2,3],n_features2_1)
         top_features_l2_456 = feature_selection_layer2(x_train, y_train,[4,5,6],n_features2_2)
-
+        print("Using {} features for 123".format(len(top_features_l2_123)))
+        print(top_features_l2_123)
+        print("Using {} features for 456".format(len(top_features_l2_456)))
+        print(top_features_l2_456)
         # ------ HMM -----
         # e.g. pred_y = hmm(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456)
         # ------  SVM ----------
-        pred_y = svm_classifier(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456)
+        classifier = svm.SVC()
+        pred_y = two_layer_classifier(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456,classifier)
         score = performance(pred_y,y_test)
-        svm_scores[i] = score
-        # ------ Random Forest -----
-        # pred_y = rf_classifier(x_train, y_train_b,x_test)
-        # score = performance(pred_y,y_test,y_test_b)
-        # rf_scores[i] = score
+        model_scores['svm'][i] = score
 
-    print('Performance of SVM: {}'.format(svm_scores))
-    print(svm_scores)
-    # print('Performance of RF: {}'.format(rf_scores))
-    # print(rf_scores)
+        # ------  Gaussian Naive Bayes ----------
+        classifier = GaussianNB()
+        pred_y = two_layer_classifier(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456,classifier)
+        score = performance(pred_y,y_test)
+        model_scores['gnb'][i] = score
+        
+        # ----- Decision Trees --------
+        classifier = tree.DecisionTreeClassifier()
+        pred_y = two_layer_classifier(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456,classifier)
+        score = performance(pred_y,y_test)
+        model_scores['dt'][i] = score
 
+        # ------- RandomForest ---------
+        classifier = RandomForestClassifier(n_estimators=1000,max_depth=2,random_state=0)
+        pred_y = two_layer_classifier(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456,classifier)
+        score = performance(pred_y,y_test)
+        model_scores['rf'][i] = score
+
+    for model in model_scores.keys():
+        print('Performance of {}: {}'.format(model, model_scores[model]))
+        print(np.mean(model_scores[model]))
 
 
 def get_data(ACT):
@@ -76,6 +91,7 @@ def feature_selection_layer1(x,y):
     #     print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
     return indices
 
+
 def feature_selection_layer2(x,y,ACT,n_features):
     '''
     This function conducts feature selection for wtihin 123/456 classification
@@ -92,26 +108,6 @@ def feature_selection_layer2(x,y,ACT,n_features):
     all_features = np.concatenate(all_features,axis=0)
     all_features = np.unique(all_features)
     return all_features 
-
-
-def feature_selection_RF(x,y):
-    '''
-    this function does feature selection
-    the output stores the index of the most important feature, second-most important feature... so on
-    '''
-    forest = RandomForestClassifier(n_estimators=1000,max_depth=2,random_state=0)
-    forest.fit(x,y)
-    # print(sorted(forest.feature_importances_,reverse=True))
-    importances = forest.feature_importances_ 
-    # importance stores the importance of the firest feature, second feature,... (it is nor sorted by value)    
-    indices = np.argsort(importances)[::-1] # return the reversed indices that sort the importance.
-
-    # Print the feature ranking of top 20 (the feature index start from 0)
-    print("Feature ranking:")
-    for f in range(20):
-        print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
-
-    return indices
 
 
 def split_folds_by_sequence(x,y,Kfold):
@@ -154,22 +150,21 @@ def binary_label(y,ACT1,ACT2):
     return y_b
 
 
-def svm_classifier(x_train,y_train,x_test,top_f_l1,top_f_l2_123,top_f_l2_456):
-
+def two_layer_classifier(x_train,y_train,x_test,top_f_l1,top_f_l2_123,top_f_l2_456,classfier):
     #  ------ training ---------
     # layer 1
     y_train_b_l1 = binary_label(y_train,[1,2,3],[4,5,6])
-    model_l1 = svm.SVC()
+    model_l1 = clone(classfier)
     model_l1.fit(x_train[:,top_f_l1], y_train_b_l1)  
     
     # layer 2 [1,2,3]
     x,y = get_data_for_these_activities(x_train,y_train,[1,2,3])
-    model_l2_123 = svm.SVC()
+    model_l2_123 = clone(classfier)
     model_l2_123.fit(x[:,top_f_l2_123], y)  
     
     # layer 2 [4,5,6]
     x,y = get_data_for_these_activities(x_train,y_train,[4,5,6])
-    model_l2_456 = svm.SVC()
+    model_l2_456 = clone(classfier)
     model_l2_456.fit(x[:,top_f_l2_456], y)  
 
     #  ------ testing ---------
@@ -197,12 +192,6 @@ def get_data_for_these_activities(x_train,y_train,ACT):
             new_x[j,:] = x_train[i,:]
             j+=1
     return new_x,new_y
-
-def rf_classifier(x_train, y_train_b,x_test):
-    forest = RandomForestClassifier(n_estimators=2000,max_depth=2,random_state=0)
-    forest.fit(x_train,y_train_b)
-    y_pred = forest.predict(x_test)
-    return y_pred
 
 
 def get_final_prediction(pred_Y_l1,pred_Y_l2_123,pred_Y_l2_456):
@@ -242,10 +231,10 @@ def performance(pred_y,y):
 
 
 if __name__ == '__main__':
-    parameters = [[9,83,86],[1,2,3], [4,5,6]]
+    # parameters = [[9,83,86],[1,2,3], [4,5,6]]
     # try_other_classifier([9,83,86],[1,2,3], [4,5,6])
     # feature_selection_RF([1],[2])
 
-    try_other_classifier(10,10,10,5)  
+    try_other_classifiers(10,20,20,5)  
     
     #number of features for first layer, number of features for second layer 123,  number of features for second layer 456, K-fold cross validation
