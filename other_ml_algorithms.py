@@ -58,7 +58,7 @@ def try_other_classifiers(n_features,n_features2_1,n_features2_2,Kfold):
         model_scores['dt'][i] = score
 
         # ------- RandomForest ---------
-        classifier = RandomForestClassifier(n_estimators=1000,max_depth=2,random_state=0)
+        classifier = RandomForestClassifier()
         pred_y = two_layer_classifier(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456,classifier)
         score = performance(pred_y,y_test)
         model_scores['rf'][i] = score
@@ -79,7 +79,7 @@ def feature_selection_layer1(x,y):
     '''
     This function conducts feature selection for 123 vs 456 classification
     '''
-    forest = RandomForestClassifier(n_estimators=1000,max_depth=2,random_state=0)
+    forest = RandomForestClassifier()    #n_estimators=1000,max_depth=2,random_state=0
     forest.fit(x,y)
     importances = forest.feature_importances_ 
     indices = np.argsort(importances)[::-1] # return the reversed indices that sort the importance.
@@ -235,6 +235,6 @@ if __name__ == '__main__':
     # try_other_classifier([9,83,86],[1,2,3], [4,5,6])
     # feature_selection_RF([1],[2])
 
-    try_other_classifiers(10,20,20,5)  
+    try_other_classifiers(10,561,561,5)  
     
     #number of features for first layer, number of features for second layer 123,  number of features for second layer 456, K-fold cross validation
