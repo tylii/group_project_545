@@ -246,6 +246,24 @@ def cal_b_matrix(x, miu, covar, H, K):
             
     return B
 
+def cal_b_matrix_GMM(x, miu, covar, w, H, K):
+    # This function calculates the pdf for a Gaussian mixture for all x for all
+    # hidden states 
+    # weights should be of dimension (H, n_mixture)
+    # returns a matrix B that is (T, H, n_mixture)
+    M = w.shape[1] # number of mixtures
+    B = np.zeros((K,H,M))
+    for h in range(H):
+        for k in range(K):
+            for m in range(M):
+                tmp = w[h,m]*cal_b(x[k,:], miu[h,:,m], covar[h,:,m])
+                if np.isinf(tmp):
+                    tmp = 1e307
+                elif tmp == 0:
+                    tmp = 1e-307
+                B[k,h,m] = tmp
+    return B
+
 def _log_multivariate_normal_density_diag(X, means, covars):
     """Compute Gaussian log-density at X for a diagonal model."""
     X = np.concatenate((X), axis = 0)

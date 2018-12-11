@@ -1,6 +1,8 @@
 ### Log computation of the forward and backward probabilities 
 import numpy as np
+from hmm import cal_b_matrix_GMM
 from hmm import cal_b_matrix
+
 #%% define the extended helper functions 
 
 def eexp(x):
@@ -49,8 +51,7 @@ def elnproduct(eln_x,eln_y):
 def forward_step(A, B, pi, H, K):
     """ Forward step in the log domain."""
     # A is H x H transition matrix
-    # B should be N x H matrix of the log pdf's, N is observations
-    # B is output of the _log_multivariate_normal_density_diag() function
+    # B should be K x N matrix of the log pdf's, 
     # pi is 1 x H vector of prior probabilities
     alpha = np.zeros((H,K))
     for i in range(0,H): # loop through all states at time t = 1
@@ -176,6 +177,7 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
     
     for e in range(E):
         x_train = x[e][:,d]
+#        B = cal_b_matrix_GMM(x_train, B_mean, B_var, w, H, K)
         B = cal_b_matrix(x_train, B_mean, B_var, H, K)
         alpha = forward_step(A, B, pi, H, K)
         beta  = backward_step(A, B, pi, H, K)
@@ -187,8 +189,14 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
         gamma_mat.append(gamma)
         xi_mat.append(xi)
 
+    # update the weights of the Gaussian mixtures
+#    w_tmp = np.zeros(w.shape)
+#    for e in range(E):
+#        for j in range(K):
+#            #need gamma[e][i,t,m]
+
     # update pi
-    pi_tmp = np.zeros((2,))
+    pi_tmp = np.zeros((H,))
     for e in range(E):
         pi_tmp += np.asarray(update_pi(gamma_mat[e], H))
     pi = pi_tmp/E    
