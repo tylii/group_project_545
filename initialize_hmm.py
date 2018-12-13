@@ -77,17 +77,17 @@ def init_par(H):
 def segment_data(y):
   # Segment the activity sequences by taking the labels, and getting 
   # the starting and ending indices of a sequence
-  cur_label = 5 # current label
+  cur_label = y[0] # current label
   start = 0
   activity_indices = []
   for i in range(0, len(y)):
     if y[i] != cur_label:
       end = i
       activity_indices.append([cur_label, start, end])
-      start = i+1
+      start = end
       cur_label = y[i]
   # add in the last sequence
-  activity_indices.append([cur_label, end+1, len(y)])
+  activity_indices.append([cur_label, end, len(y)])
   return np.array(activity_indices)
 
 def standardize_data(x):
