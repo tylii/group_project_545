@@ -1,6 +1,8 @@
 ### Log computation of the forward and backward probabilities 
 import numpy as np
+from hmm import cal_b_matrix_GMM
 from hmm import cal_b_matrix
+
 #%% define the extended helper functions 
 
 def eexp(x):
@@ -46,25 +48,26 @@ def elnproduct(eln_x,eln_y):
 #%% Computing the probability of observing a sequence
 
 # forward algorithm in log space
-def forward_step(A, B, pi, H, K):
+def forward_step(A, B, pi, w, H, K):
     """ Forward step in the log domain."""
     # A is H x H transition matrix
-    # B should be N x H matrix of the log pdf's, N is observations
-    # B is output of the _log_multivariate_normal_density_diag() function
+    # B should be K x N matrix of the log pdf's, 
     # pi is 1 x H vector of prior probabilities
     alpha = np.zeros((H,K))
     for i in range(0,H): # loop through all states at time t = 1
-        alpha[i,0] = elnproduct(eln(pi[i]), eln(B[0,i]))
+        sum_B = np.inner(w[i,:], B[0,i,:])
+        alpha[i,0] = elnproduct(eln(pi[i]), eln(sum_B))
     for t in range(1,K):
         for j in range(H):
             logalpha = np.nan
             for i in range(H):
                 tmp = elnproduct(alpha[i,t-1], eln(A[i,j]))
                 logalpha = elnsum(logalpha, tmp)
-            alpha[j,t] = elnproduct(logalpha, eln(B[t,j]))
+            sum_B = np.inner(w[j,:], B[t,j,:])    
+            alpha[j,t] = elnproduct(logalpha, eln(sum_B))
     return alpha
 
-def backward_step(A, B, pi, H, K):
+def backward_step(A, B, pi, w, H, K):
     """ Backward step in the log domain"""
     beta = np.zeros((H,K))
     for i in range(H):
@@ -73,7 +76,8 @@ def backward_step(A, B, pi, H, K):
         for i in range(H):
             logbeta = np.nan
             for j in range(H):
-                tmp1 = elnproduct(B[t+1,j],beta[j,t+1]) # changed to eln(B)
+                sum_B = np.inner(w[j,:], B[t+1,j,:])
+                tmp1 = elnproduct(sum_B,beta[j,t+1]) 
                 tmp2 = elnproduct(eln(A[i,j]),tmp1)
                 logbeta = elnsum(logbeta, tmp2)
             beta[i,t] = logbeta
@@ -91,6 +95,18 @@ def calc_gamma(alpha, beta, H, K):
             gamma[i,t] = elnproduct(gamma[i,t], -normalizer)
     return gamma
 
+def calc_gamma_GMM(gamma, w, B, H, K):
+    """ Calculate the gamma probabilities for the GMM model"""
+    M = w.shape[1]
+    gamma_GMM = np.zeros((H,K,M))
+    for t in range(K):
+        for i in range(H):
+            for m in range(M):
+                sum_B = np.inner(w[i,:],B[t,i,:])
+                tmp = eexp(gamma[i,t]) * ((w[i,m]* B[t,i,m])/sum_B) 
+                gamma_GMM[i,t,m] = eln(tmp)
+    return gamma_GMM
+
 def calc_xi(alpha, beta, A, B, H, K):
     """Compute probability of being in state i at time t, and state j at
     time t+1 in log space"""
@@ -99,7 +115,7 @@ def calc_xi(alpha, beta, A, B, H, K):
         normalizer = np.nan
         for i in range(H):
             for j in range(H):
-                tmp1 = elnproduct(eln(B[t+1,j]),beta[j,t+1])
+                tmp1 = elnproduct(eln(np.sum(B[t+1,j,:])),beta[j,t+1])
                 tmp2 = elnproduct(eln(A[i,j]),tmp1)
                 xi[t,i,j] = elnproduct(alpha[i,t],tmp2)
                 normalizer = elnsum(normalizer,xi[t,i,j])
@@ -160,7 +176,7 @@ def update_var(gamma, x, H, K, miu):
                 var[i,j] = 1e-3
     return var
         
-def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
+def forward_backward_algorithm(x, A, B_mean, B_var, pi, w, H, K, d):
     """ Performs a full pass through the Baum-Welch algorithm
     and updates A and pi, miu and var. Need to loop through all the 
     sequences, computing alpha, beta, gamma, and xi for each."""
@@ -169,26 +185,47 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
     
     # initialize alpha, beta, gamma, and xi matrices 
     E = len(x) # number of sequences
+    M = w.shape[1] # number of mixtures
     alpha_mat = []
     beta_mat  = []
     gamma_mat = []
+    gammaGMM_mat = []
     xi_mat    = []
     
     for e in range(E):
         x_train = x[e][:,d]
-        B = cal_b_matrix(x_train, B_mean, B_var, H, K)
-        alpha = forward_step(A, B, pi, H, K)
-        beta  = backward_step(A, B, pi, H, K)
+        B = cal_b_matrix_GMM(x_train, B_mean, B_var, w, H, K)
+        alpha = forward_step(A, B, pi, w, H, K)
+        beta  = backward_step(A, B, pi, w,H, K)
         gamma = calc_gamma(alpha, beta, H, K)
+        gamma_GMM = calc_gamma_GMM(gamma, w, B, H, K)
         xi    = calc_xi(alpha, beta, A, B, H, K)
         
         alpha_mat.append(alpha)
         beta_mat.append(beta)
         gamma_mat.append(gamma)
+        gammaGMM_mat.append(gamma_GMM)
         xi_mat.append(xi)
 
+    # update the weights of the Gaussian mixtures
+    w_tmp = np.zeros(w.shape)
+    for i in range(H):
+        for l in range(M):
+            super_num = 0 
+            super_den = 0
+            for e in range(E):
+                num = np.nan
+                den = np.nan
+                for t in range(K):
+                    num = elnsum(num, gammaGMM_mat[e][i,t,l])
+                    den = elnsum(den, gamma_mat[e][i,t])
+                super_num += eexp(num)
+                super_den += eexp(den)
+            w_tmp[i,l] = super_num/super_den
+    w = w_tmp
+
     # update pi
-    pi_tmp = np.zeros((2,))
+    pi_tmp = np.zeros((H,))
     for e in range(E):
         pi_tmp += np.asarray(update_pi(gamma_mat[e], H))
     pi = pi_tmp/E    
@@ -209,39 +246,40 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
                 super_den += eexp(denominator)
             A[i,j] = super_num/super_den
     
-    # update mean of B
-    miu = np.zeros((H,len(d)))
-    for i in range(H):
-        super_num = 0
-        super_den = 0
-        for e in range(E):
-            num = 0
-            den = 0
-            for t in range(0,K):
-                num += eexp(gamma_mat[e][i,t])*x[e][t,d]
-                den += eexp(gamma_mat[e][i,t])
-            super_num += num
-            super_den += den
-        miu[i,:] = np.divide(super_num,super_den)
+    # update mean of emission density
+    miu = np.zeros((H,len(d), M))
+    for m in range(M):
+        for i in range(H):
+            super_num = 0
+            super_den = 0
+            for e in range(E):
+                num = 0
+                den = 0
+                for t in range(0,K):
+                    num += eexp(gammaGMM_mat[e][i,t,m])*x[e][t,d]
+                    den += eexp(gammaGMM_mat[e][i,t,m])
+                super_num += num
+                super_den += den
+            miu[i,:,m] = np.divide(super_num,super_den)
     
-    # update variance of B
-    var = np.zeros((H, len(d)))
-    for i in range(H):
-        super_num = 0
-        super_den = 0
-        for e in range(E):
-            num = 0
-            den = 0
-            for t in range(0,K):
-                num += eexp(gamma_mat[e][i,t])*np.outer(x[e][t,d]-B_mean[i,:], x[e][t,d]-B_mean[i,:])
-                den += eexp(gamma_mat[e][i,t])
-            super_num += num
-            super_den += den
-        var[i,:] = np.diag(np.divide(super_num,super_den))
-            
-        # set lower bound on variances 
-        for j in range(0,len(d)):
-            if var[i,j] < 1e-6:
-                var[i,j] = 1e-6    
-    
-    return A, miu, var, pi
+    # update variance of emission density
+    var = np.zeros((H, len(d), M))
+    for m in range(M):
+        for i in range(H):
+            super_num = 0
+            super_den = 0
+            for e in range(E):
+                num = 0
+                den = 0
+                for t in range(0,K):
+                    num += eexp(gammaGMM_mat[e][i,t,m])*np.outer(x[e][t,d]-B_mean[i,:,m], x[e][t,d]-B_mean[i,:,m])
+                    den += eexp(gammaGMM_mat[e][i,t,m])
+                super_num += num
+                super_den += den
+            var[i,:,m] = np.diag(np.divide(super_num,super_den))
+                
+            # set lower bound on variances 
+            for j in range(0,len(d)):
+                if var[i,j,m] < 1e-6:
+                    var[i,j,m] = 1e-6    
+    return A, miu, var, pi, w
