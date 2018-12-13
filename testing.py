@@ -82,7 +82,7 @@ def predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, A_mov, B_me
             
     return y_pred, L_stat, L_mov
 
-def predict_stage2(s, A, B_mean, B_var, pi, w, d, H, K):
+def predict_stage2(s, A, B_mean, B_var, pi, w, d, H, K, data_type):
     """ Function for generating predictions from the second stage models"""
     # A should be a list of the transition matrices in order of either 1,2,3 or 4,5,6
     # same with B_mean, B_var, and pi
@@ -90,16 +90,25 @@ def predict_stage2(s, A, B_mean, B_var, pi, w, d, H, K):
 
     # standardize it (get z-scores)
     x_train = initialize_hmm.standardize_data(x_train) 
+    x_test  = initialize_hmm.standardize_data(x_test)
     
     # get the indices of each activity sequence 
     activity_train = initialize_hmm.segment_data(y_train)  
+    activity_test  = initialize_hmm.segment_data(y_test)
     
-    all_segments = []
-    for i in s:
-        segment = hmm.all_sequences(x_train,i, activity_train)
-        all_segments = all_segments + segment
-    x = all_segments
-    
+    if data_type == "train":
+        all_segments = []
+        for i in s:
+            segment = hmm.all_sequences(x_train,i, activity_train)
+            all_segments = all_segments + segment
+        x = all_segments
+    elif data_type == "test":
+        all_segments = []
+        for i in s:
+            segment = hmm.all_sequences(x_test,i, activity_test)
+            all_segments = all_segments + segment
+        x = all_segments   
+        
     E = len(x)
     L1 = np.zeros((E,))
     L2 = np.zeros((E,))
@@ -152,18 +161,25 @@ def compute_error_stage1(y_pred):
     print("Testing error rate for Stage 1 is {}.".format(error))
     return error, y_labels
 
-def compute_error_stage2(s, y_pred):
+def compute_error_stage2(s, y_pred, data_type):
     # get the appropriate y labels
     x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
 
     # get the indices of each activity sequence 
     activity_train = initialize_hmm.segment_data(y_train)  
+    activity_test  = initialize_hmm.segment_data(y_test)
     
     # get the required segments of activities 
-    y_labels = []
-    for i in s:
-        segment = hmm.all_sequences(x_train,i, activity_train)
-        y_labels = y_labels + (i*np.ones((len(segment)))).tolist()
+    if data_type == "train":
+        y_labels = []
+        for i in s:
+            segment = hmm.all_sequences(x_train,i, activity_train)
+            y_labels = y_labels + (i*np.ones((len(segment)))).tolist()
+    elif data_type == "test":
+        y_labels = []
+        for i in s:
+            segment = hmm.all_sequences(x_test,i, activity_test)
+            y_labels = y_labels + (i*np.ones((len(segment)))).tolist() 
     
     # compute error 
     error = 0.0
@@ -172,7 +188,7 @@ def compute_error_stage2(s, y_pred):
         if y_pred[e] != y_labels[e]:
             error+= 1
     error = error/E
-    print("Error rate for Stage 2 is {}.".format(error))
+    print("{} Error rate for Stage 2 is {}.".format(data_type, error))
     return error, y_labels
   
 #%% Stage 1 models
@@ -189,27 +205,34 @@ def compute_error_stage2(s, y_pred):
 
 #%% Stage 2 models 
 
-#d_mov = [37, 53, 65, 66, 67, 68, 69, 70, 71,73, 74,75, 76, 209, 222, 302 ,310]
-d_mov = range(561)
+d_mov = [37, 53, 65, 66, 67, 68, 69, 70, 71,73, 74,75, 76, 209, 222, 302 ,310]
+#d_mov = range(561)
 H = 3
 K = 7
-n_mixture = 5
-n_iter = 2
+n_mixture = 1
+n_iter = 10
 A_W,  B_mean_W,  B_var_W,  pi_W,  w_W  = train_model([1], 3, 7, d_mov, n_mixture, n_iter)
 A_WU, B_mean_WU, B_var_WU, pi_WU, w_WU = train_model([2], 3, 7, d_mov, n_mixture, n_iter)
 A_WD, B_mean_WD, B_var_WD, pi_WD, w_WD = train_model([3], 3, 7, d_mov, n_mixture, n_iter)
 
-#d_stat = [40, 41, 42, 49, 50, 51, 52, 53, 54, 56, 77, 558, 559, 560]
-d_stat = range(561)
+d_stat = [40, 41, 42, 49, 50, 51, 52, 53, 54, 56, 77, 558, 559, 560]
+#d_stat = range(561)
 A_SI, B_mean_SI, B_var_SI, pi_SI, w_SI = train_model([4], 3, 7, d_stat, n_mixture, n_iter)
 A_ST, B_mean_ST, B_var_ST, pi_ST, w_ST = train_model([5], 3, 7, d_stat, n_mixture, n_iter)
 A_LY, B_mean_LY, B_var_LY, pi_LY, w_LY = train_model([6], 3, 7, d_stat, n_mixture, n_iter)
 
-y_pred_mov = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], [w_W, w_WU, w_WD], d_mov, H, K)
-error_mov, y_labels_mov  = compute_error_stage2([1,2,3],y_pred_mov)
+# Error rate 
+y_pred_mov, L1, L2, L3 = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], [w_W, w_WU, w_WD], d_mov, H, K, "train")
+error_mov, y_labels_mov  = compute_error_stage2([1,2,3],y_pred_mov, "train")
 
-y_pred_stat = predict_stage2([4,5,6], [A_SI, A_ST, A_LY],[B_mean_SI, B_mean_ST, B_mean_LY], [B_var_SI, B_var_ST, B_var_LY], [pi_SI, pi_ST, pi_LY], [w_SI, w_ST, w_LY], d_stat, H, K)
-error_stat, ylabels_stat = compute_error_stage2([4,5,6],y_pred_stat)
+y_pred_mov, L1, L2, L3 = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], [w_W, w_WU, w_WD], d_mov, H, K, "test")
+error_mov, y_labels_mov  = compute_error_stage2([1,2,3],y_pred_mov, "test")
+
+y_pred_stat, L1, L2, L3 = predict_stage2([4,5,6], [A_SI, A_ST, A_LY],[B_mean_SI, B_mean_ST, B_mean_LY], [B_var_SI, B_var_ST, B_var_LY], [pi_SI, pi_ST, pi_LY], [w_SI, w_ST, w_LY], d_stat, H, K, "train")
+error_stat, ylabels_stat = compute_error_stage2([4,5,6],y_pred_stat, "train")
+
+y_pred_stat, L1, L2, L3 = predict_stage2([4,5,6], [A_SI, A_ST, A_LY],[B_mean_SI, B_mean_ST, B_mean_LY], [B_var_SI, B_var_ST, B_var_LY], [pi_SI, pi_ST, pi_LY], [w_SI, w_ST, w_LY], d_stat, H, K, "test")
+error_stat, ylabels_stat = compute_error_stage2([4,5,6],y_pred_stat, "test")
 
 #%%
 #x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
