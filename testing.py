@@ -157,12 +157,12 @@ def compute_error_stage2(s, y_pred):
     x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
 
     # get the indices of each activity sequence 
-    activity_test = initialize_hmm.segment_data(y_test)  
+    activity_train = initialize_hmm.segment_data(y_train)  
     
     # get the required segments of activities 
     y_labels = []
     for i in s:
-        segment = hmm.all_sequences(x_test,i, activity_test)
+        segment = hmm.all_sequences(x_train,i, activity_train)
         y_labels = y_labels + (i*np.ones((len(segment)))).tolist()
     
     # compute error 
