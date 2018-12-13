@@ -256,7 +256,9 @@ def cal_b_matrix_GMM(x, miu, covar, w, H, K):
     for h in range(H):
         for k in range(K):
             for m in range(M):
-                tmp = w[h,m]*cal_b(x[k,:], miu[h,:,m], covar[h,:,m])
+#                tmp = w[h,m]*cal_b(x[k,:], miu[h,:,m], covar[h,:,m])
+                tmp = cal_b(x[k,:], miu[h,:,m], covar[h,:,m])
+
                 if np.isinf(tmp):
                     tmp = 1e307
                 elif tmp == 0:
