@@ -43,6 +43,15 @@ def train_model(s, H, K, d, n_iter):
 def predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, d, H, K):     
     """ Function for generating predictions from the first stage (moving or 
     stationary) model"""
+    
+    x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
+
+    # standardize it (get z-scores)
+    x_train = initialize_hmm.standardize_data(x_train) 
+    
+    # get the indices of each activity sequence 
+    activity_train = initialize_hmm.segment_data(y_train) 
+    
     all_segments = []
     for i in range(1,7):
         segment = hmm.all_sequences(x_train,i, activity_train)
@@ -129,7 +138,7 @@ def compute_error_stage1(y_pred):
             error+= 1
     error = error/E
     print("Testing error rate for Stage 1 is {}.".format(error))
-
+    return error, y_labels
 def compute_error_stage2(s, y_pred):
     # get the appropriate y labels
     x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
@@ -153,26 +162,28 @@ def compute_error_stage2(s, y_pred):
     print("Error rate for Stage 2 is {}.".format(error))
     return error
     
-#d = [9, 6, 19, 84, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 99]
-#H = 2
-#K = 7
-#A_stat, B_mean_stat, B_var_stat, pi_stat = train_model([4,5,6], H, K, d, 3)
-#A_mov, B_mean_mov, B_var_mov, pi_mov= train_model([1,2,3], H, K, d, 3)
-#y_pred = predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, d, H, K)
-
-d_mov = [37, 53, 65, 66, 67, 68, 69, 70, 71,73, 74,75, 76, 209, 222, 302 ,310]
-d_mov = range(561)
-A_W,  B_mean_W,  B_var_W,  pi_W  = train_model([1], 3, 7, d_mov, 2)
-A_WU, B_mean_WU, B_var_WU, pi_WU = train_model([2], 3, 7, d_mov, 2)
-A_WD, B_mean_WD, B_var_WD, pi_WD = train_model([3], 3, 7, d_mov, 2)
-
-d_stat = [40, 41, 42, 49, 50, 51, 52, 53, 54, 56, 77, 558, 559, 560]
-A_SI, B_mean_SI, B_var_SI, pi_SI = train_model([4], 3, 7, d_stat, 6)
-A_ST, B_mean_ST, B_var_ST, pi_ST = train_model([5], 3, 7, d_stat, 6)
-A_LY, B_mean_LY, B_var_LY, pi_LY = train_model([6], 3, 7, d_stat, 6)
-
-y_pred = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], d_mov, 3, 7)
-error  = compute_error_stage2([1,2,3],y_pred)
+#%% Stage 2 
+d = [9, 6, 19, 84, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 99]
+H = 2
+K = 7
+A_stat, B_mean_stat, B_var_stat, pi_stat = train_model([4,5,6], H, K, d, 3)
+A_mov, B_mean_mov, B_var_mov, pi_mov = train_model([1,2,3], H, K, d, 3)
+y_pred = predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, d, H, K)
+error, y_labels = compute_error_stage1(y_pred)
+#%% Stage 2
+#d_mov = [37, 53, 65, 66, 67, 68, 69, 70, 71,73, 74,75, 76, 209, 222, 302 ,310]
+#d_mov = range(561)
+#A_W,  B_mean_W,  B_var_W,  pi_W  = train_model([1], 3, 7, d_mov, 2)
+#A_WU, B_mean_WU, B_var_WU, pi_WU = train_model([2], 3, 7, d_mov, 2)
+#A_WD, B_mean_WD, B_var_WD, pi_WD = train_model([3], 3, 7, d_mov, 2)
+#
+#d_stat = [40, 41, 42, 49, 50, 51, 52, 53, 54, 56, 77, 558, 559, 560]
+#A_SI, B_mean_SI, B_var_SI, pi_SI = train_model([4], 3, 7, d_stat, 6)
+#A_ST, B_mean_ST, B_var_ST, pi_ST = train_model([5], 3, 7, d_stat, 6)
+#A_LY, B_mean_LY, B_var_LY, pi_LY = train_model([6], 3, 7, d_stat, 6)
+#
+#y_pred = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], d_mov, 3, 7)
+#error  = compute_error_stage2([1,2,3],y_pred)
 #%%
 #x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
 #
@@ -218,8 +229,7 @@ error  = compute_error_stage2([1,2,3],y_pred)
 #    print("Iteration {}".format(i))
 #    A_mov, B_mean_mov, B_var_mov, pi_mov = log_FB_seq.forward_backward_algorithm(x_train_mov, A_mov, B_mean_mov, B_var_mov, pi_mov, H, K, d)
 #
-##%% Compute misclassification rate on training error 
-#    
+## Compute misclassification rate on training error   
 ## compute likelihoods
 #all_train = segments1 + segments2 + segments3 + segments4 + segments5 + segments6
 #E = len(all_train)
@@ -255,8 +265,8 @@ error  = compute_error_stage2([1,2,3],y_pred)
 #
 #print("Training error rate for Stage 1 is {}.".format(error))
 #
-#
-#
+
+
 ##%% Compute misclassification rate on training error 
 ## pre-process test data
 #x_test = initialize_hmm.standardize_data(x_test)

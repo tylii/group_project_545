@@ -1,6 +1,5 @@
 ### Log computation of the forward and backward probabilities 
 import numpy as np
-from hmm import cal_b_matrix_GMM
 from hmm import cal_b_matrix
 
 #%% define the extended helper functions 
@@ -177,7 +176,6 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
     
     for e in range(E):
         x_train = x[e][:,d]
-#        B = cal_b_matrix_GMM(x_train, B_mean, B_var, w, H, K)
         B = cal_b_matrix(x_train, B_mean, B_var, H, K)
         alpha = forward_step(A, B, pi, H, K)
         beta  = backward_step(A, B, pi, H, K)
@@ -188,12 +186,6 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, H, K, d):
         beta_mat.append(beta)
         gamma_mat.append(gamma)
         xi_mat.append(xi)
-
-    # update the weights of the Gaussian mixtures
-#    w_tmp = np.zeros(w.shape)
-#    for e in range(E):
-#        for j in range(K):
-#            #need gamma[e][i,t,m]
 
     # update pi
     pi_tmp = np.zeros((H,))
