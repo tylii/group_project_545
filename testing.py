@@ -38,9 +38,9 @@ def train_model(s, H, K, d, n_mixture, n_iter):
     B_var  = B_var[:,d,:]
     for j in range(n_iter):
         print("Iteration {}".format(j))
-        A, B_mean, B_var, pi, w, gamma_mat, gammaGMM_mat = log_FB_seq.forward_backward_algorithm(x, A, B_mean, B_var, pi, w, H, K, d)
+        A, B_mean, B_var, pi, w = log_FB_seq.forward_backward_algorithm(x, A, B_mean, B_var, pi, w, H, K, d)
     
-    return A, B_mean, B_var, pi, w, gamma_mat, gammaGMM_mat
+    return A, B_mean, B_var, pi, w
 
 def predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, w_mov, d, H, K):     
     """ Function for generating predictions from the first stage (moving or 
@@ -48,6 +48,9 @@ def predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, A_mov, B_me
     
     # get the appropriate y labels
     x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
+    
+    # standardize it (get z-scores)
+    x_train = initialize_hmm.standardize_data(x_train) 
 
     # get the indices of each activity sequence 
     activity_train = initialize_hmm.segment_data(y_train) 
@@ -79,21 +82,21 @@ def predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, A_mov, B_me
             
     return y_pred, L_stat, L_mov
 
-def predict_stage2(s, A, B_mean, B_var, pi, d, H, K):
+def predict_stage2(s, A, B_mean, B_var, pi, w, d, H, K):
     """ Function for generating predictions from the second stage models"""
     # A should be a list of the transition matrices in order of either 1,2,3 or 4,5,6
     # same with B_mean, B_var, and pi
     x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()
 
     # standardize it (get z-scores)
-    x_test = initialize_hmm.standardize_data(x_test) 
+    x_train = initialize_hmm.standardize_data(x_train) 
     
     # get the indices of each activity sequence 
-    activity_test = initialize_hmm.segment_data(y_train)  
+    activity_train = initialize_hmm.segment_data(y_train)  
     
     all_segments = []
     for i in s:
-        segment = hmm.all_sequences(x_test,i, activity_test)
+        segment = hmm.all_sequences(x_train,i, activity_train)
         all_segments = all_segments + segment
     x = all_segments
     
@@ -103,13 +106,14 @@ def predict_stage2(s, A, B_mean, B_var, pi, d, H, K):
     L3 = np.zeros((E,))
     y_pred = []
     for e in range(E):
-        B0  = hmm.cal_b_matrix(x[e][:,d], B_mean[0], B_var[0], H, K)
-        B1  = hmm.cal_b_matrix(x[e][:,d], B_mean[1], B_var[1], H, K)
-        B2  = hmm.cal_b_matrix(x[e][:,d], B_mean[2], B_var[2], H, K)
+        print(e)
+        B0  = hmm.cal_b_matrix_GMM(x[e][:,d], B_mean[0], B_var[0], w[0], H, K)
+        B1  = hmm.cal_b_matrix_GMM(x[e][:,d], B_mean[1], B_var[1], w[1], H, K)
+        B2  = hmm.cal_b_matrix_GMM(x[e][:,d], B_mean[2], B_var[2], w[2], H, K)
         
-        alpha1 = log_FB_seq.forward_step(A[0], B0, pi[0], H, K)
-        alpha2 = log_FB_seq.forward_step(A[1], B1, pi[1], H, K)
-        alpha3 = log_FB_seq.forward_step(A[2], B2, pi[2], H, K)
+        alpha1 = log_FB_seq.forward_step(A[0], B0, pi[0], w[0], H, K)
+        alpha2 = log_FB_seq.forward_step(A[1], B1, pi[1], w[1], H, K)
+        alpha3 = log_FB_seq.forward_step(A[2], B2, pi[2], w[2], H, K)
         
         L1[e] = np.sum(alpha1[:,-1])
         L2[e] = np.sum(alpha2[:,-1])
@@ -146,7 +150,7 @@ def compute_error_stage1(y_pred):
             error+= 1
     error = error/E
     print("Testing error rate for Stage 1 is {}.".format(error))
-    return error 
+    return error, y_labels
 
 def compute_error_stage2(s, y_pred):
     # get the appropriate y labels
@@ -169,38 +173,43 @@ def compute_error_stage2(s, y_pred):
             error+= 1
     error = error/E
     print("Error rate for Stage 2 is {}.".format(error))
-    return error
+    return error, y_labels
   
 #%% Stage 1 models
     
-d = [9, 6, 19, 84, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 99]
-H = 2
-K = 7
-n_mixture = 1
-n_iter = 3
-A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, gamma1, gammaGMM1 = train_model([4,5,6], H, K, d, n_mixture, n_iter)
-A_mov, B_mean_mov, B_var_mov, pi_mov, w_mov, gamma2, gammaGMM2 = train_model([1,2,3], H, K, d, n_mixture, n_iter)
-y_pred, L_stat, L_mov = predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, w_mov, d, H, K)
-error = compute_error_stage1(y_pred)
+#d = [9, 6, 19, 84, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 99]
+#H = 2
+#K = 7
+#n_mixture = 4
+#n_iter = 3
+#A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat = train_model([4,5,6], H, K, d, n_mixture, n_iter)
+#A_mov, B_mean_mov, B_var_mov, pi_mov, w_mov = train_model([1,2,3], H, K, d, n_mixture, n_iter)
+#y_pred, L_stat, L_mov = predict_stage1(A_stat, B_mean_stat, B_var_stat, pi_stat, w_stat, A_mov, B_mean_mov, B_var_mov, pi_mov, w_mov, d, H, K)
+#error, y_labels = compute_error_stage1(y_pred)
 
 #%% Stage 2 models 
 
 #d_mov = [37, 53, 65, 66, 67, 68, 69, 70, 71,73, 74,75, 76, 209, 222, 302 ,310]
-#d_mov = range(561)
-#A_W,  B_mean_W,  B_var_W,  pi_W  = train_model([1], 3, 7, d_mov, 2)
-#A_WU, B_mean_WU, B_var_WU, pi_WU = train_model([2], 3, 7, d_mov, 2)
-#A_WD, B_mean_WD, B_var_WD, pi_WD = train_model([3], 3, 7, d_mov, 2)
+d_mov = range(561)
+H = 3
+K = 7
+n_mixture = 5
+n_iter = 2
+A_W,  B_mean_W,  B_var_W,  pi_W,  w_W  = train_model([1], 3, 7, d_mov, n_mixture, n_iter)
+A_WU, B_mean_WU, B_var_WU, pi_WU, w_WU = train_model([2], 3, 7, d_mov, n_mixture, n_iter)
+A_WD, B_mean_WD, B_var_WD, pi_WD, w_WD = train_model([3], 3, 7, d_mov, n_mixture, n_iter)
 
 #d_stat = [40, 41, 42, 49, 50, 51, 52, 53, 54, 56, 77, 558, 559, 560]
-#A_SI, B_mean_SI, B_var_SI, pi_SI = train_model([4], 3, 7, d_stat, 6)
-#A_ST, B_mean_ST, B_var_ST, pi_ST = train_model([5], 3, 7, d_stat, 6)
-#A_LY, B_mean_LY, B_var_LY, pi_LY = train_model([6], 3, 7, d_stat, 6)
+d_stat = range(561)
+A_SI, B_mean_SI, B_var_SI, pi_SI, w_SI = train_model([4], 3, 7, d_stat, n_mixture, n_iter)
+A_ST, B_mean_ST, B_var_ST, pi_ST, w_ST = train_model([5], 3, 7, d_stat, n_mixture, n_iter)
+A_LY, B_mean_LY, B_var_LY, pi_LY, w_LY = train_model([6], 3, 7, d_stat, n_mixture, n_iter)
 
-#y_pred = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], d_mov, 3, 7)
-#error  = compute_error_stage2([1,2,3],y_pred)
+y_pred_mov = predict_stage2([1,2,3], [A_W, A_WU, A_WD], [B_mean_W, B_mean_WU, B_mean_WD], [B_var_W, B_var_WU, B_var_WD], [pi_W, pi_WU, pi_WD], [w_W, w_WU, w_WD], d_mov, H, K)
+error_mov, y_labels_mov  = compute_error_stage2([1,2,3],y_pred_mov)
 
-
-
+y_pred_stat = predict_stage2([4,5,6], [A_SI, A_ST, A_LY],[B_mean_SI, B_mean_ST, B_mean_LY], [B_var_SI, B_var_ST, B_var_LY], [pi_SI, pi_ST, pi_LY], [w_SI, w_ST, w_LY], d_stat, H, K)
+error_stat, ylabels_stat = compute_error_stage2([4,5,6],y_pred_stat)
 
 #%%
 #x_train, y_train, s_train, x_test, y_test, s_test = initialize_hmm.load_data()

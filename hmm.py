@@ -260,9 +260,9 @@ def cal_b_matrix_GMM(x, miu, covar, w, H, K):
                 tmp = cal_b(x[k,:], miu[h,:,m], covar[h,:,m])
 
                 if np.isinf(tmp):
-                    tmp = 1e307
+                    tmp = 1e300
                 elif tmp == 0:
-                    tmp = 1e-307
+                    tmp = 1e-300
                 B[k,h,m] = tmp
     return B
 
@@ -322,12 +322,28 @@ def initialize_GaussianMixture(x, n_Gauss, n_mixture):
   # parse the segmented x_train data into a matrix
   x= np.concatenate((x), axis = 0)
   
-  main_kmeans = KMeans(n_clusters = n_Gauss, random_state = 1).fit(x)
+  unbalanced = 1
+  seed = 0
+  while unbalanced:
+      print("\n K-means iteration")
+      main_kmeans = KMeans(n_clusters = n_Gauss, random_state = seed).fit(x)
+      
+      for i in range(n_Gauss):
+          n_samples = np.sum(main_kmeans.labels_ == i)
+          print(n_samples)
+          if n_samples < n_mixture:
+              unbalanced = 1
+              seed += 1
+              print("seed = {}".format(seed))
+              break
+          else:
+              unbalanced = 0
+      print("Unbalanced: {}".format(unbalanced))
   labels = main_kmeans.labels_
     
   kmeanses = []
   for label in range(n_Gauss):
-      kmeans = KMeans(n_clusters = n_mixture, random_state = 1)
+      kmeans = KMeans(n_clusters = n_mixture, random_state = 0)
       kmeans.fit(x[np.where(labels == label)])
       kmeanses.append(kmeans)
   

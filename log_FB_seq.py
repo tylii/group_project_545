@@ -282,4 +282,4 @@ def forward_backward_algorithm(x, A, B_mean, B_var, pi, w, H, K, d):
             for j in range(0,len(d)):
                 if var[i,j,m] < 1e-6:
                     var[i,j,m] = 1e-6    
-    return A, miu, var, pi, w, gamma_mat, gammaGMM_mat
+    return A, miu, var, pi, w
