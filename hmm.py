@@ -77,7 +77,7 @@ def hmm_train(K, H, n_iterations, model_type):
   x_train = segments
 #  y_stationary = initialize_hmm.relabel(y_train)
   # initialize the model parameters
-  A, pi = initialize_hmm.init_par(x_train, y_train, H) # x_train, y_train not used in the function
+  A, pi = initialize_hmm.init_par(H) # x_train, y_train not used in the function
   kmeans, B_mean, B_var = initialize_GMM(x_train, H)
 
   # activity_train/test has three columns: activity   start    end
@@ -194,11 +194,11 @@ def activity_sequence(i, activityIndex, x, K):
   start_ind  = activityIndex[i, 1]
   end_ind    = activityIndex[i, 2]
   length     = end_ind - start_ind
-  frame_data = x[start_ind:end_ind, :]
+  frame_data = x[int(start_ind):int(end_ind), :]
   
   # need to determine how many frames are in each state
   if length >= K:
-    frames_per_state = length//K
+    frames_per_state = int(length//K)
     #print('~{} frames per state.'.format(frames_per_state))
     # segment the frame data (average the vectors?)
     states = []

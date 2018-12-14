@@ -15,6 +15,7 @@ def CV_HMM(n_features, n_features2_1, n_features2_2, Kfold, n_mixture, n_iter):
     x,y = get_data([1,2,3,4,5,6])  # here y is like [3,1,4,4,5,2 ....] (not binary label)
     folds = split_folds_by_sequence(x,y,Kfold)
 
+    model_scores_l1 = defaultdict(lambda: np.zeros(len(folds)))
     model_scores = defaultdict(lambda: np.zeros(len(folds)))
     for i in range(len(folds)):
         x_train, y_train,x_test,y_test = get_train_test_from_folds(folds,i)
@@ -33,9 +34,19 @@ def CV_HMM(n_features, n_features2_1, n_features2_2, Kfold, n_mixture, n_iter):
         print(top_features_l2_456)
         
         # ------ HMM -----
-        y_pred, y_test = hmmlearn.hmm(x_train,y_train,x_test, y_test, top_features_l1, top_features_l2_123,top_features_l2_456, n_mixture, n_iter)
+        y_pred, y_test = hmmlearn.hmmlearn(x_train,y_train,x_test, y_test, top_features_l1, top_features_l2_123,top_features_l2_456, n_mixture, n_iter)
         model_scores['hmm'][i] =  metrics.accuracy_score(y_test, y_pred)
 
+        y_pred_b = binary_label(y_pred,[1,2,3],[4,5,6])   
+        y_test_b = binary_label(y_test,[1,2,3],[4,5,6])      
+        model_scores_l1['hmm'][i] = metrics.accuracy_score(y_test_b, y_pred_b)
+        
+        print("Iteration {}, layer 1 accuracy {}, overall accuracy {}".format(i,model_scores_l1['hmm'][i],model_scores['hmm'][i]))
+    
+    for model in model_scores.keys():
+        print('Performance of {} (1st layer): {}'.format(model, model_scores_l1[model]))
+        print(np.mean(model_scores_l1[model]))
+    
     for model in model_scores.keys():
         print('Performance of {}: {}'.format(model, model_scores[model]))
         print(np.mean(model_scores[model]))
@@ -67,7 +78,7 @@ def try_other_classifiers(n_features,n_features2_1,n_features2_2,Kfold, n_mixtur
         print("Using {} features for 456".format(len(top_features_l2_456)))
         print(top_features_l2_456)
         # ------ HMM -----
-        y_pred, y_test = hmmlearn.hmm(x_train,y_train,x_test, y_test, top_features_l1, top_features_l2_123,top_features_l2_456, n_mixture, n_iter)
+        y_pred, y_test = hmmlearn.hmmlearn(x_train,y_train,x_test, y_test, top_features_l1, top_features_l2_123,top_features_l2_456, n_mixture, n_iter)
         model_scores['hmm'][i] =  metrics.accuracy_score(y_test, y_pred)
         # ------  SVM ----------
         classifier = svm.SVC()
@@ -265,6 +276,6 @@ if __name__ == '__main__':
     # try_other_classifier([9,83,86],[1,2,3], [4,5,6])
     # feature_selection_RF([1],[2])
 
-    try_other_classifiers(10,561,561,5)  
+    try_other_classifiers(10,3,3,5, 1, 5) 
     
     #number of features for first layer, number of features for second layer 123,  number of features for second layer 456, K-fold cross validation

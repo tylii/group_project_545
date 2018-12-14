@@ -52,7 +52,7 @@ def hmmlearn(x_train, y_train, x_test, y_test, top_features_l1, top_features_l2_
         
         # get back the original size of the y_test
         og_length = activity_test[i,2]-activity_test[i,1]
-        y_og      = [prediction_stage2 for a in range(og_length)]
+        y_og      = [prediction_stage2 for a in range(int(og_length))]
         y_pred += y_og
     
     # remove the nan's due to invalid sequence lengths 
