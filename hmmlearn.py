@@ -1,11 +1,10 @@
-#pred_y = hmm(x_train,y_train,x_test,top_features_l1, top_features_l2_123,top_features_l2_456)
 import testing
 import initialize_hmm
 import hmm
 import numpy as np
 
 def hmmlearn(x_train, y_train, x_test, y_test, top_features_l1, top_features_l2_l123, top_features_l2_l456, n_mixture = 1, n_iter = 3):
-    """ Overarching two-stage HMM classifier """
+    """ Overarching two-stage HMM classifier that trains and predicts"""
         
     ### Build model for layer 1 
     # parameters 

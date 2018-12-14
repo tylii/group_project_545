@@ -1,7 +1,6 @@
 ### Log computation of the forward and backward probabilities 
 import numpy as np
 from hmm import cal_b_matrix_GMM
-from hmm import cal_b_matrix
 
 #%% define the extended helper functions 
 

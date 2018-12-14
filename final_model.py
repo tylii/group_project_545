@@ -278,5 +278,5 @@ if __name__ == '__main__':
     # feature_selection_RF([1],[2])
 
     # try_other_classifiers(10,3,3,5, 1, 5) 
-    Final_HMM(10,20,35,10,5,5) 
+    Final_HMM(10,5,1,2,1,2) 
     #number of features for first layer, number of features for second layer 123,  number of features for second layer 456, K-fold cross validation

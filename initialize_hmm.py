@@ -2,11 +2,16 @@
 import os
 import numpy as np 
 from sklearn import preprocessing
-from scipy import stats
 
 def load_data():
   # load the training and testing data 
   # Change the directory to wherever the folder is located
+      
+  # "subject_train.txt" shows which subject number did the acts in "X_train"
+  # ^ the rows of "subject_train" match up with the rows of "X_train"
+  # ^ "y_test" gives the movement of each row from 1-6. NOTE: movements of 1 person can change during experiment
+  # ^ 1 WALKING, 2 WALKING_UPSTAIRS, 3 WALKING_DOWNSTAIRS, 4 SITTING, 5 STANDING, 6 LAYING
+  
   os.chdir("/Users/SARL/Downloads/UCI HAR Dataset")
   f_x = open("train/X_train.txt", 'r')
   f_y = open("train/y_train.txt", 'r')
@@ -45,10 +50,7 @@ def load_data():
 
 def init_par(H):
   # Labels: Walking = W, Walking Upstairs = WU, Walking Downstairs = WD, Sitting = SI, Standing = ST, Laying = LY
-  # number of features = m , 
-  # training samples = n, 
-  # number of hidden states = K, 
-  # time points = T
+  # number of hidden states H 
   
   # initial prior probability distribution
   pi = (1.0/H)*np.ones(H)
@@ -56,22 +58,6 @@ def init_par(H):
   # initial transition probability matrix
   # A(i,j) is the probability that the hidden variable transititions from state i, to state j at some time t: P(S_t = j | S_(t-1) = i)
   A = (1.0/H) * np.ones((H,H))
-    
-  # get the indices for each activity
-#  ind_W  = [i for i, a in enumerate(y_train) if a == 1]
-#  ind_WU = [i for i, a in enumerate(y_train) if a == 2]
-#  ind_WD = [i for i, a in enumerate(y_train) if a == 3]
-#  ind_SI = [i for i, a in enumerate(y_train) if a == 4]
-#  ind_ST = [i for i, a in enumerate(y_train) if a == 5]
-#  ind_LY = [i for i, a in enumerate(y_train) if a == 6]
-  
-#  x_W  = [x_train[j] for j in ind_W]
-#  x_WU = [x_train[j] for j in ind_WU]
-#  x_WD = [x_train[j] for j in ind_WD]
-#  x_SI = [x_train[j] for j in ind_SI]
-#  x_ST = [x_train[j] for j in ind_ST]
-#  x_LY = [x_train[j] for j in ind_LY]
-
   return A, pi
 
 def segment_data(y):
@@ -92,37 +78,5 @@ def segment_data(y):
 
 def standardize_data(x):
   z = preprocessing.scale(x)
-  # z = stats.zscore(x, axis = 0)
   return z
-
-def test():
-  activity_indices = segment_data([y_train,y_test])
-  return activity_indices
-
-def relabel(y_train):
-    # This function relabels data into either moving or stationary 
-    # 0 for stationary, 1 for moving 
-    y = []
-    for i in range(len(y_train)):
-        if (y_train[i] == 1 or y_train[i] == 2 or y_train[i] == 3):
-            y.append(1)
-        elif (y_train[i] == 4 or y_train[i] == 5 or y_train[i] == 6):
-            y.append(0)
-        else:
-            print("Error")
-    return np.asarray(y)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
