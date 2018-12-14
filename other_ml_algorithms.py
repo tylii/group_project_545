@@ -41,13 +41,13 @@ def CV_HMM(n_features, n_features2_1, n_features2_2, Kfold, n_mixture, n_iter):
         y_test_b = binary_label(y_test,[1,2,3],[4,5,6])      
         model_scores['hmm_l1'][i] = metrics.accuracy_score(y_test_b, y_pred_b)
 
-        ind_123 = [i for i in range(len(y_test)) if y_test[i] in [1,2,3]]
+        ind_123 = [p for p in range(len(y_test)) if y_test[p] in [1,2,3]]
         model_scores['hmm_l2_123'][i] = metrics.accuracy_score(y_test[ind_123], y_pred[ind_123])
 
-        ind_456 = [i for i in range(len(y_test)) if y_test[i] in [4,5,6]]
+        ind_456 = [p for p in range(len(y_test)) if y_test[p] in [4,5,6]]
         model_scores['hmm_l2_456'][i] = metrics.accuracy_score(y_test[ind_456], y_pred[ind_456])
         
-        print("Iteration {}, layer 1 accuracy {}, overall accuracy {}".format(i,model_scores_l1['hmm'][i],model_scores['hmm'][i]))
+        print("Iteration {}, layer 1 accuracy {}, overall accuracy {}".format(i,model_scores['hmm_l1'][i],model_scores['hmm'][i]))
     
     for model in model_scores.keys():
         print('Performance of {}: {}'.format(model, model_scores[model]))
@@ -279,5 +279,5 @@ if __name__ == '__main__':
     # feature_selection_RF([1],[2])
 
     # try_other_classifiers(10,3,3,5, 1, 5) 
-    CV_HMM(10,3,3,5, 1, 5) 
+    CV_HMM(10,5,3,10,1,5) 
     #number of features for first layer, number of features for second layer 123,  number of features for second layer 456, K-fold cross validation
